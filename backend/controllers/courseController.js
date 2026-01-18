@@ -1,10 +1,10 @@
 const supabase = require('../supabaseClient');
 
 // ============================
-// 1. Search Courses
+// 1. Search Courses (STUDENTS)
 // ============================
 exports.searchCourses = async (req, res) => {
-  const { code, dept, session, title, instructor } = req.query;
+  const { code, dept, session, title } = req.query;
 
   try {
     let query = supabase
@@ -16,11 +16,14 @@ exports.searchCourses = async (req, res) => {
         department,
         acad_session,
         capacity,
-        instructor:users (
+        enrolled_count,
+        instructor:users!courses_faculty_id_fkey (
           full_name,
           email
         )
-      `);
+      `)
+      // 🔒 IMPORTANT: students see ONLY approved courses
+      .eq('status', 'APPROVED');
 
     // Filters
     if (dept) {
@@ -37,11 +40,6 @@ exports.searchCourses = async (req, res) => {
 
     if (title) {
       query = query.ilike('title', `%${title}%`);
-    }
-
-    // Instructor name filter (JOIN-based)
-    if (instructor) {
-      query = query.ilike('users.full_name', `%${instructor}%`);
     }
 
     const { data, error } = await query;

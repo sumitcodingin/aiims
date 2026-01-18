@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import FloatCourse from "./instructor/FloatCourse";
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
@@ -11,25 +12,35 @@ export default function InstructorDashboard() {
     window.location.href = "/";
   };
 
+  // ============================
+  // Fetch pending applications
+  // ============================
   useEffect(() => {
     if (activeTab === "approvals") {
       api
-        .get("/instructor/applications/1")
+        .get("/instructor/applications/1") // TODO: replace 1 with dynamic course later
         .then((res) => setApplications(res.data || []))
         .catch(() => setApplications([]));
     }
   }, [activeTab]);
 
+  // ============================
+  // Approve / Reject
+  // ============================
   const handleAction = async (enrollmentId, action) => {
-    await api.post("/instructor/approve-request", {
-      enrollmentId,
-      action,
-      instructor_id: user.id,
-    });
+    try {
+      await api.post("/instructor/approve-request", {
+        enrollmentId,
+        action,
+        instructor_id: user.id,
+      });
 
-    setApplications(
-      applications.filter((a) => a.enrollment_id !== enrollmentId)
-    );
+      setApplications((prev) =>
+        prev.filter((a) => a.enrollment_id !== enrollmentId)
+      );
+    } catch (err) {
+      alert("Failed to update enrollment");
+    }
   };
 
   return (
@@ -37,7 +48,7 @@ export default function InstructorDashboard() {
       {/* 🔵 BLUE NAVBAR */}
       <nav className="bg-blue-600 text-white shadow px-6 py-4 flex justify-between items-center">
         <h1 className="text-xl font-bold">
-          Instructor Dashboard
+          👨‍🏫 Instructor Dashboard
         </h1>
 
         <div className="flex gap-6 items-center">
@@ -48,6 +59,15 @@ export default function InstructorDashboard() {
             }`}
           >
             Approvals
+          </button>
+
+          <button
+            onClick={() => setActiveTab("float")}
+            className={`font-medium ${
+              activeTab === "float" && "underline"
+            }`}
+          >
+            Float Course
           </button>
 
           <button
@@ -70,8 +90,11 @@ export default function InstructorDashboard() {
         </div>
       </nav>
 
-      {/* CONTENT */}
+      {/* ============================
+          CONTENT
+      ============================ */}
       <div className="p-6">
+        {/* ---------- APPROVALS ---------- */}
         {activeTab === "approvals" && (
           <div className="max-w-3xl">
             <h2 className="text-lg font-bold mb-4">
@@ -82,19 +105,20 @@ export default function InstructorDashboard() {
               <p className="text-gray-600">No pending applications.</p>
             ) : (
               applications.map((a) => {
-                const student = a.users || a.student || null;
+                // ✅ SAFE student extraction (fixes your error)
+                const student = a.student || a.users || {};
 
                 return (
                   <div
                     key={a.enrollment_id}
-                    className="bg-white p-4 shadow rounded mb-3 flex justify-between"
+                    className="bg-white p-4 shadow rounded mb-3 flex justify-between items-center"
                   >
                     <div>
                       <p className="font-semibold">
-                        {student?.full_name || "Unknown Student"}
+                        {student.full_name || "Unknown Student"}
                       </p>
                       <p className="text-sm text-gray-600">
-                        {student?.email || "—"}
+                        {student.email || "—"}
                       </p>
                     </div>
 
@@ -124,6 +148,10 @@ export default function InstructorDashboard() {
           </div>
         )}
 
+        {/* ---------- FLOAT COURSE ---------- */}
+        {activeTab === "float" && <FloatCourse />}
+
+        {/* ---------- PROFILE ---------- */}
         {activeTab === "profile" && (
           <div className="bg-white p-6 shadow rounded max-w-xl">
             <h2 className="text-lg font-bold mb-4">
@@ -140,6 +168,9 @@ export default function InstructorDashboard() {
   );
 }
 
+// ============================
+// Profile Row Component
+// ============================
 function ProfileItem({ label, value }) {
   return (
     <div className="mb-3">

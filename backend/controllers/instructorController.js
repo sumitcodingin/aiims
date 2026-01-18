@@ -122,8 +122,51 @@ const approveByInstructor = async (req, res) => {
   }
 };
 
+// ============================
+// 4. Float a course (NEW)
+// ============================
+const floatCourse = async (req, res) => {
+  const {
+    course_code,
+    title,
+    department,
+    acad_session,
+    capacity,
+    advisor_id,
+    instructor_id
+  } = req.body;
+
+  try {
+    const { error } = await supabase
+      .from('courses')
+      .insert([
+        {
+          course_code,
+          title,
+          department,
+          acad_session,
+          capacity,
+          faculty_id: instructor_id,
+          advisor_id,
+          status: 'PENDING_ADVISOR_APPROVAL',
+          enrolled_count: 0
+        }
+      ]);
+
+    if (error) throw error;
+
+    res.status(201).json({
+      message: "Course floated successfully. Waiting for advisor approval."
+    });
+  } catch (err) {
+    console.error("FLOAT COURSE ERROR:", err);
+    res.status(500).json({ error: "Failed to float course." });
+  }
+};
+
 module.exports = {
   getCourseApplications,
   awardGrade,
-  approveByInstructor
+  approveByInstructor,
+  floatCourse
 };
