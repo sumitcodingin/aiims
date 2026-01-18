@@ -13,7 +13,8 @@ export default function Signup() {
   });
 
   const sendOtp = async () => {
-    if (!form.email || !form.full_name || !form.department) {
+    const isStudent = form.role === "Student";
+    if (!form.email || !form.full_name || !form.department || (isStudent && (!form.batch || !form.entry_no))) {
       alert("Please fill all required fields");
       return;
     }
@@ -72,6 +73,15 @@ export default function Signup() {
           <option value="Instructor">Instructor</option>
           <option value="Advisor">Advisor</option>
         </select>
+
+        {form.role === "Student" && (
+          <div className="animate-in fade-in duration-300">
+            <input className="w-full border p-2 mb-3" placeholder="Batch (e.g., 2023)" 
+                   value={form.batch} onChange={(e) => setForm({ ...form, batch: e.target.value })} />
+            <input className="w-full border p-2 mb-3" placeholder="Entry Number (e.g., 2023CSB1001)" 
+                   value={form.entry_no} onChange={(e) => setForm({ ...form, entry_no: e.target.value })} />
+          </div>
+        )}
 
         {/* Department Dropdown */}
         <select

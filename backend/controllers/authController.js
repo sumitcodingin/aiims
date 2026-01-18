@@ -90,7 +90,7 @@ exports.verifyOTP = async (req, res) => {
 
 // STEP 1: REQUEST OTP (SIGNUP)
 exports.requestSignupOTP = async (req, res) => {
-  const { email, full_name, role, department } = req.body;
+  const { email, full_name, role, department, batch, entry_no } = req.body;
 
   try {
     // Validate email domain
@@ -114,8 +114,10 @@ exports.requestSignupOTP = async (req, res) => {
       return res.status(400).json({ error: "User already exists." });
     }
 
-    if (role === "Student" && !department) {
-      return res.status(400).json({ error: "Department is required." });
+    if (role === "Student") {
+      if(!department || !batch || !entry_no) {
+        return res.status(400).json({ error: "Department, Batch, and Entry Number are required." });
+      }
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -130,7 +132,7 @@ exports.requestSignupOTP = async (req, res) => {
 
     res.json({
       message: "Signup OTP sent",
-      tempUser: { email, full_name, role, department }
+      tempUser: { email, full_name, role, department, batch, entry_no }
     });
   } catch (err) {
     console.error(err);
@@ -140,7 +142,7 @@ exports.requestSignupOTP = async (req, res) => {
 
 // STEP 2: VERIFY OTP & CREATE USER
 exports.verifySignupOTP = async (req, res) => {
-  const { email, otp, full_name, role, department } = req.body;
+  const { email, otp, full_name, role, department, batch, entry_no } = req.body;
 
   try {
     // Validate email domain (defense in depth)
@@ -198,6 +200,24 @@ exports.verifySignupOTP = async (req, res) => {
     if (insertError) {
       console.error(insertError);
       return res.status(500).json({ error: "User creation failed." });
+    }
+
+    // CREATE STUDENT PROFILE
+    if (role === "Student") {
+      const { error: profileError } = await supabase
+        .from('student_profile')
+        .insert([
+          {
+            student_id: user.user_id, // Link to the newly created user
+            batch: batch,
+            entry_no: entry_no
+          }
+        ]);
+
+      if (profileError) {
+        console.error("Student profile creation failed:", profileError);
+        // Optional: You could delete the user record here if profile creation fails
+      }
     }
 
     await supabase.from('otp_store').delete().eq('email', email);

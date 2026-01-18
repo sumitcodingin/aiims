@@ -104,7 +104,7 @@ exports.getStudentProfile = async (req, res) => {
   const { student_id } = req.query;
 
   try {
-    // 1️⃣ Fetch student
+    // Fetch student
     const { data: student, error } = await supabase
       .from('users')
       .select(`
@@ -123,9 +123,16 @@ exports.getStudentProfile = async (req, res) => {
       return res.status(404).json({ error: 'Student not found.' });
     }
 
+    // SEPARATE fetch for the 'student_profile' table
+    const { data: profileData } = await supabase
+      .from('student_profile')
+      .select('batch, entry_no')
+      .eq('student_id', student_id)
+      .single();
+
     let advisor = null;
 
-    // 2️⃣ Fetch advisor separately (if exists)
+    // Fetch advisor separately (if exists)
     if (student.advisor_id) {
       const { data: advisorData } = await supabase
         .from('users')
@@ -136,9 +143,10 @@ exports.getStudentProfile = async (req, res) => {
       advisor = advisorData || null;
     }
 
-    // 3️⃣ Merge response
+    // Merge response
     res.json({
       ...student,
+      student_profile: profileData || null,
       advisor,
     });
   } catch (err) {
