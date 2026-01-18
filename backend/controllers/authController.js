@@ -1,96 +1,76 @@
 const supabase = require('../supabaseClient');
 const { sendOTPEmail } = require('../utils/mailer');
 
-// ============================
-// STEP 1: REQUEST OTP (NO EXPIRY)
-// ============================
+/* =====================================================
+   LOGIN FLOW (EXISTING USERS)
+===================================================== */
+
+// STEP 1: REQUEST OTP (LOGIN)
 exports.requestOTP = async (req, res) => {
   const { email } = req.body;
 
   try {
-    // 1. Check if user exists
-    const { data: user, error: userError } = await supabase
+    const { data: user, error } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
       .single();
 
-    if (userError || !user) {
+    if (error || !user) {
       return res.status(404).json({ error: "User not registered." });
     }
 
-    // 2. Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 3. Remove any previous OTPs for this email
-    await supabase
-      .from('otp_store')
-      .delete()
-      .eq('email', email);
+    await supabase.from('otp_store').delete().eq('email', email);
 
-    // 4. Store new OTP (NO EXPIRY)
     const { error: insertError } = await supabase
       .from('otp_store')
-      .insert([
-        {
-          email: email,
-          otp_code: otp
-        }
-      ]);
+      .insert([{ email, otp_code: otp }]);
 
     if (insertError) {
-      console.error("OTP INSERT ERROR:", insertError);
+      console.error(insertError);
       return res.status(500).json({ error: "Failed to store OTP." });
     }
 
-    // 5. Send OTP email
     await sendOTPEmail(email, otp);
 
-    res.status(200).json({ message: "OTP sent successfully." });
+    res.json({ message: "OTP sent successfully." });
   } catch (err) {
-    console.error("REQUEST OTP ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: "Failed to send OTP." });
   }
 };
 
-// ============================
-// STEP 2: VERIFY OTP (NO EXPIRY)
-// ============================
+// STEP 2: VERIFY OTP (LOGIN)
 exports.verifyOTP = async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-    // 1. Validate OTP
-    const { data: record, error: otpError } = await supabase
+    const { data: record } = await supabase
       .from('otp_store')
       .select('*')
       .eq('email', email)
       .eq('otp_code', otp)
       .single();
 
-    if (otpError || !record) {
+    if (!record) {
       return res.status(401).json({ error: "Invalid OTP." });
     }
 
-    // 2. Fetch user details
-    const { data: user, error: userError } = await supabase
+    const { data: user } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
       .single();
 
-    if (userError || !user) {
+    if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
 
-    // 3. Delete OTP after successful login (one-time use)
-    await supabase
-      .from('otp_store')
-      .delete()
-      .eq('email', email);
+    await supabase.from('otp_store').delete().eq('email', email);
 
-    // 4. Login success
-    res.status(200).json({
+    res.json({
       message: "Login successful",
       user: {
         id: user.user_id,
@@ -99,7 +79,125 @@ exports.verifyOTP = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error("VERIFY OTP ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: "OTP verification failed." });
+  }
+};
+
+/* =====================================================
+   SIGNUP FLOW (NEW USERS)
+===================================================== */
+
+// STEP 1: REQUEST OTP (SIGNUP)
+exports.requestSignupOTP = async (req, res) => {
+  const { email, full_name, role, department } = req.body;
+
+  try {
+    if (role === "Admin") {
+      return res.status(403).json({ error: "Admin signup not allowed." });
+    }
+
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('user_id')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      return res.status(400).json({ error: "User already exists." });
+    }
+
+    if (role === "Student" && !department) {
+      return res.status(400).json({ error: "Department is required." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    await supabase.from('otp_store').delete().eq('email', email);
+
+    await supabase.from('otp_store').insert([
+      { email, otp_code: otp }
+    ]);
+
+    await sendOTPEmail(email, otp);
+
+    res.json({
+      message: "Signup OTP sent",
+      tempUser: { email, full_name, role, department }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to send signup OTP." });
+  }
+};
+
+// STEP 2: VERIFY OTP & CREATE USER
+exports.verifySignupOTP = async (req, res) => {
+  const { email, otp, full_name, role, department } = req.body;
+
+  try {
+    const { data: record } = await supabase
+      .from('otp_store')
+      .select('*')
+      .eq('email', email)
+      .eq('otp_code', otp)
+      .single();
+
+    if (!record) {
+      return res.status(401).json({ error: "Invalid OTP." });
+    }
+
+    let advisorId = null;
+
+    // ✅ AUTO-ASSIGN ADVISOR FOR STUDENT
+    if (role === "Student") {
+      const { data: advisor, error } = await supabase
+        .from('users')
+        .select('user_id')
+        .eq('role', 'Advisor')
+        .eq('department', department)
+        .single();
+
+      if (error || !advisor) {
+        return res.status(400).json({
+          error: `No advisor found for department ${department}`
+        });
+      }
+
+      advisorId = advisor.user_id;
+    }
+
+    const { data: user, error: insertError } = await supabase
+      .from('users')
+      .insert([
+        {
+          email,
+          full_name,
+          role,
+          department,
+          advisor_id: advisorId
+        }
+      ])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error(insertError);
+      return res.status(500).json({ error: "User creation failed." });
+    }
+
+    await supabase.from('otp_store').delete().eq('email', email);
+
+    res.json({
+      message: "Signup successful",
+      user: {
+        id: user.user_id,
+        name: user.full_name,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Signup verification failed." });
   }
 };

@@ -7,7 +7,8 @@ const studentRoutes = require('./routes/studentRoutes');
 const instructorRoutes = require('./routes/instructorRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const courseRoutes = require('./routes/courseRoutes');
-const advisorRoutes = require('./routes/advisorRoutes'); // ✅ NEW
+const advisorRoutes = require('./routes/advisorRoutes');
+const userRoutes = require('./routes/userRoutes'); // ✅ ADD THIS
 
 const app = express();
 
@@ -23,12 +24,13 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/instructor', instructorRoutes);
-app.use('/api/advisor', advisorRoutes); // ✅ NEW
+app.use('/api/advisor', advisorRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/courses', courseRoutes);
+app.use('/api/users', userRoutes); // ✅ THIS FIXES THE 404
 
 // ============================
-// HEALTH CHECK (OPTIONAL)
+// HEALTH CHECK
 // ============================
 app.get('/', (req, res) => {
   res.send('AIMS-Lite Backend is running 🚀');

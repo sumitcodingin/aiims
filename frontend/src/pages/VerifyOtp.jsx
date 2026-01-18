@@ -33,7 +33,7 @@ export default function VerifyOtp() {
             Session expired. Please login again.
           </p>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/", { replace: true })}
             className="bg-blue-600 text-white px-4 py-2 rounded"
           >
             Go to Login
@@ -64,8 +64,8 @@ export default function VerifyOtp() {
       localStorage.setItem("user", JSON.stringify(res.data.user));
       localStorage.removeItem("otp_email");
 
-      // IMPORTANT: force reload so ProtectedRoute reads localStorage
-      window.location.href = "/dashboard";
+      // Navigate to dashboard (ProtectedRoute will allow)
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       alert(
         err.response?.data?.error ||
