@@ -1,16 +1,30 @@
-const router = require('express').Router();
+const router = require("express").Router();
+
 const {
   approveByAdvisor,
-  getPendingCourses,
+  getAdvisorCourses,
+  getPendingStudentsForCourse,
   approveCourse
-} = require('../controllers/advisorController');
+} = require("../controllers/advisorController");
 
-router.post('/approve-request', approveByAdvisor);
+/* ===============================
+   STUDENT ENROLLMENT APPROVAL
+================================ */
 
-// GET: /api/advisor/pending-courses?advisor_id=5
-router.get('/pending-courses', getPendingCourses);
+// POST /api/advisor/approve-request
+router.post("/approve-request", approveByAdvisor);
 
-// POST: /api/advisor/approve-course
-router.post('/approve-course', approveCourse);
+// GET /api/advisor/courses?advisor_id=
+router.get("/courses", getAdvisorCourses);
+
+// GET /api/advisor/pending-students?advisor_id=&course_id=
+router.get("/pending-students", getPendingStudentsForCourse);
+
+/* ===============================
+   COURSE APPROVAL
+================================ */
+
+// POST /api/advisor/approve-course
+router.post("/approve-course", approveCourse);
 
 module.exports = router;

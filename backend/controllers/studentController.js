@@ -16,7 +16,6 @@ exports.applyForCourse = async (req, res) => {
     ]);
 
     if (error) {
-      // Unique constraint → duplicate application
       if (error.code === '23505') {
         return res.status(400).json({
           error: 'Duplicate Application',
@@ -26,7 +25,9 @@ exports.applyForCourse = async (req, res) => {
       throw error;
     }
 
-    res.status(201).json({ message: 'Application submitted.' });
+    res.status(201).json({
+      message: 'Application submitted. Awaiting instructor approval.',
+    });
   } catch (err) {
     console.error('APPLY COURSE ERROR:', err);
     res.status(500).json({ error: 'Failed to apply for course.' });
@@ -50,7 +51,6 @@ exports.dropCourse = async (req, res) => {
       return res.status(404).json({ error: 'Enrollment not found.' });
     }
 
-    // Cannot drop after grading
     if (enrollment.grade !== null) {
       return res.status(403).json({
         error: 'Course already graded, cannot drop.',
@@ -100,45 +100,49 @@ exports.getStudentRecords = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch student records.' });
   }
 };
-// ===================================
-// Get student profile details
-// ===================================
-// ===================================
-// Get student profile details
-// ===================================
 exports.getStudentProfile = async (req, res) => {
   const { student_id } = req.query;
 
   try {
-    const { data, error } = await supabase
-      .from("users")
+    // 1️⃣ Fetch student
+    const { data: student, error } = await supabase
+      .from('users')
       .select(`
         user_id,
         full_name,
         email,
         role,
         department,
-        created_at,
-        advisor:advisor_id (
-          user_id,
-          full_name,
-          email
-        ),
-        student_profile (
-          batch,
-          entry_no
-        )
+        advisor_id,
+        created_at
       `)
-      .eq("user_id", student_id)
+      .eq('user_id', student_id)
       .single();
 
-    if (error || !data) {
-      return res.status(404).json({ error: "Student not found." });
+    if (error || !student) {
+      return res.status(404).json({ error: 'Student not found.' });
     }
 
-    res.json(data);
+    let advisor = null;
+
+    // 2️⃣ Fetch advisor separately (if exists)
+    if (student.advisor_id) {
+      const { data: advisorData } = await supabase
+        .from('users')
+        .select('user_id, full_name, email')
+        .eq('user_id', student.advisor_id)
+        .single();
+
+      advisor = advisorData || null;
+    }
+
+    // 3️⃣ Merge response
+    res.json({
+      ...student,
+      advisor,
+    });
   } catch (err) {
-    console.error("STUDENT PROFILE ERROR:", err);
-    res.status(500).json({ error: "Failed to fetch student profile." });
+    console.error('STUDENT PROFILE ERROR:', err);
+    res.status(500).json({ error: 'Failed to fetch student profile.' });
   }
 };

@@ -2,8 +2,15 @@ import { useEffect, useState } from "react";
 import api from "../services/api";
 
 export default function AdvisorDashboard() {
-  const [activeTab, setActiveTab] = useState("approvals");
+  const [activeTab, setActiveTab] = useState("students");
+
+  // STUDENT APPROVAL STATE
   const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [students, setStudents] = useState([]);
+
+  // COURSE APPROVAL STATE
+  const [pendingCourses, setPendingCourses] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const user = JSON.parse(localStorage.getItem("user"));
@@ -13,75 +20,111 @@ export default function AdvisorDashboard() {
     window.location.href = "/";
   };
 
-  // ============================
-  // Fetch pending courses
-  // ============================
+  /* ===================================================
+     STUDENT APPROVAL FLOW
+  =================================================== */
+
+  // 1️⃣ Fetch courses that have students pending advisor approval
+  useEffect(() => {
+    if (activeTab !== "students") return;
+
+    api
+      .get("/advisor/courses", {
+        params: { advisor_id: user.id },
+      })
+      .then((res) => setCourses(res.data || []))
+      .catch(() => setCourses([]));
+  }, [activeTab, user.id]);
+
+  // 2️⃣ Fetch students for selected course
+  useEffect(() => {
+    if (!selectedCourse) return;
+
+    api
+      .get("/advisor/pending-students", {
+        params: {
+          advisor_id: user.id,
+          course_id: selectedCourse,
+        },
+      })
+      .then((res) => setStudents(res.data || []))
+      .catch(() => setStudents([]));
+  }, [selectedCourse, user.id]);
+
+  // 3️⃣ Approve / Reject student
+  const handleStudentAction = async (enrollmentId, action) => {
+    await api.post("/advisor/approve-request", {
+      enrollmentId,
+      action,
+      advisor_id: user.id,
+    });
+
+    setStudents((prev) =>
+      prev.filter((s) => s.enrollment_id !== enrollmentId)
+    );
+  };
+
+  /* ===================================================
+     COURSE APPROVAL FLOW
+  =================================================== */
+
   const fetchPendingCourses = async () => {
     setLoading(true);
     try {
       const res = await api.get("/advisor/pending-courses", {
         params: { advisor_id: user.id },
       });
-      setCourses(res.data || []);
-    } catch (err) {
-      console.error(err);
-      setCourses([]);
+      setPendingCourses(res.data || []);
+    } catch {
+      setPendingCourses([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === "approvals") {
+    if (activeTab === "courses") {
       fetchPendingCourses();
     }
   }, [activeTab]);
 
-  // ============================
-  // Approve / Reject course
-  // ============================
-  const handleAction = async (course_id, action) => {
-    try {
-      await api.post("/advisor/approve-course", {
-        course_id,
-        action,
-        advisor_id: user.id,
-      });
+  const handleCourseAction = async (course_id, action) => {
+    await api.post("/advisor/approve-course", {
+      course_id,
+      action,
+      advisor_id: user.id,
+    });
 
-      // remove approved course from UI
-      setCourses(courses.filter(c => c.course_id !== course_id));
-    } catch (err) {
-      alert("Action failed");
-    }
+    setPendingCourses((prev) =>
+      prev.filter((c) => c.course_id !== course_id)
+    );
   };
+
+  /* ===================================================
+     UI
+  =================================================== */
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* 🔵 NAVBAR */}
-      <nav className="bg-blue-600 text-white shadow px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">Advisor Dashboard</h1>
+      {/* NAVBAR */}
+      <nav className="bg-blue-600 text-white px-6 py-4 flex justify-between">
+        <h1 className="text-xl font-bold">🎓 Advisor Dashboard</h1>
 
         <div className="flex gap-6 items-center">
-          <button
-            onClick={() => setActiveTab("approvals")}
-            className={activeTab === "approvals" ? "underline" : ""}
-          >
-            Approvals
-          </button>
+          <NavBtn active={activeTab === "students"} onClick={() => setActiveTab("students")}>
+            Student Approvals
+          </NavBtn>
 
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={activeTab === "profile" ? "underline" : ""}
-          >
+          <NavBtn active={activeTab === "courses"} onClick={() => setActiveTab("courses")}>
+            Course Approvals
+          </NavBtn>
+
+          <NavBtn active={activeTab === "profile"} onClick={() => setActiveTab("profile")}>
             Profile
-          </button>
+          </NavBtn>
 
           <span>{user?.name}</span>
-
-          <button
-            onClick={logout}
-            className="bg-red-500 px-3 py-1 rounded"
-          >
+          <button onClick={logout} className="bg-red-500 px-3 py-1 rounded">
             Logout
           </button>
         </div>
@@ -89,51 +132,98 @@ export default function AdvisorDashboard() {
 
       {/* CONTENT */}
       <div className="p-6">
-        {activeTab === "approvals" && (
+        {/* ================= STUDENT APPROVALS ================= */}
+        {activeTab === "students" && (
           <div className="max-w-4xl">
             <h2 className="text-lg font-bold mb-4">
-              Pending Course Approvals
+              Student Enrollment Approvals
+            </h2>
+
+            {/* Course Select */}
+            <select
+              className="border px-3 py-2 rounded w-full mb-4"
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+            >
+              <option value="">-- Select Course --</option>
+              {courses.map((c) => (
+                <option key={c.course_id} value={c.course_id}>
+                  {c.course_code} - {c.title}
+                </option>
+              ))}
+            </select>
+
+            {!selectedCourse ? (
+              <p className="text-gray-600">Select a course to view students.</p>
+            ) : students.length === 0 ? (
+              <p className="text-gray-600">No students pending approval.</p>
+            ) : (
+              students.map((s) => (
+                <div
+                  key={s.enrollment_id}
+                  className="bg-white p-4 shadow rounded mb-3 flex justify-between"
+                >
+                  <div>
+                    <p className="font-semibold">{s.student.full_name}</p>
+                    <p className="text-sm text-gray-600">{s.student.email}</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleStudentAction(s.enrollment_id, "ACCEPT")}
+                      className="bg-green-600 text-white px-3 py-1 rounded"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleStudentAction(s.enrollment_id, "REJECT")}
+                      className="bg-red-600 text-white px-3 py-1 rounded"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ================= COURSE APPROVALS ================= */}
+        {activeTab === "courses" && (
+          <div className="max-w-4xl">
+            <h2 className="text-lg font-bold mb-4">
+              Course Approvals
             </h2>
 
             {loading && <p>Loading...</p>}
 
-            {!loading && courses.length === 0 && (
-              <p className="text-gray-600">
-                No pending courses for approval.
-              </p>
+            {!loading && pendingCourses.length === 0 && (
+              <p className="text-gray-600">No pending courses.</p>
             )}
 
-            {courses.map(course => (
+            {pendingCourses.map((c) => (
               <div
-                key={course.course_id}
+                key={c.course_id}
                 className="bg-white p-4 shadow rounded mb-3 flex justify-between"
               >
                 <div>
                   <p className="font-semibold">
-                    {course.course_code} — {course.title}
+                    {c.course_code} - {c.title}
                   </p>
                   <p className="text-sm text-gray-600">
-                    Instructor: {course.instructor?.full_name}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Session: {course.acad_session}
+                    Instructor: {c.instructor?.full_name}
                   </p>
                 </div>
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() =>
-                      handleAction(course.course_id, "APPROVE")
-                    }
+                    onClick={() => handleCourseAction(c.course_id, "APPROVE")}
                     className="bg-green-600 text-white px-3 py-1 rounded"
                   >
                     Approve
                   </button>
-
                   <button
-                    onClick={() =>
-                      handleAction(course.course_id, "REJECT")
-                    }
+                    onClick={() => handleCourseAction(c.course_id, "REJECT")}
                     className="bg-red-600 text-white px-3 py-1 rounded"
                   >
                     Reject
@@ -144,12 +234,9 @@ export default function AdvisorDashboard() {
           </div>
         )}
 
+        {/* ================= PROFILE ================= */}
         {activeTab === "profile" && (
           <div className="bg-white p-6 shadow rounded max-w-xl">
-            <h2 className="text-lg font-bold mb-4">
-              Advisor Profile
-            </h2>
-
             <ProfileItem label="Name" value={user?.name} />
             <ProfileItem label="Role" value={user?.role} />
             <ProfileItem label="User ID" value={user?.id} />
@@ -157,6 +244,16 @@ export default function AdvisorDashboard() {
         )}
       </div>
     </div>
+  );
+}
+
+/* ------------------ Helpers ------------------ */
+
+function NavBtn({ active, children, ...props }) {
+  return (
+    <button {...props} className={`font-medium ${active ? "underline" : ""}`}>
+      {children}
+    </button>
   );
 }
 

@@ -4,7 +4,11 @@ import FloatCourse from "./instructor/FloatCourse";
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState("");
   const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const user = JSON.parse(localStorage.getItem("user"));
 
   const logout = () => {
@@ -12,21 +16,43 @@ export default function InstructorDashboard() {
     window.location.href = "/";
   };
 
-  // ============================
-  // Fetch pending applications
-  // ============================
+  /* ======================================
+     1. FETCH COURSES OFFERED BY INSTRUCTOR
+  ====================================== */
   useEffect(() => {
-    if (activeTab === "approvals") {
-      api
-        .get("/instructor/applications/1") // TODO: replace 1 with dynamic course later
-        .then((res) => setApplications(res.data || []))
-        .catch(() => setApplications([]));
-    }
-  }, [activeTab]);
+    if (activeTab !== "approvals") return;
 
-  // ============================
-  // Approve / Reject
-  // ============================
+    api
+      .get("/instructor/my-courses", {
+        params: { instructor_id: user.id },
+      })
+      .then((res) => setCourses(res.data || []))
+      .catch(() => setCourses([]));
+  }, [activeTab, user.id]);
+
+  /* ======================================
+     2. FETCH APPLICATIONS FOR SELECTED COURSE
+  ====================================== */
+  useEffect(() => {
+    if (!selectedCourse) return;
+
+    setLoading(true);
+
+    api
+      .get("/instructor/pending-applications", {
+        params: {
+          course_id: selectedCourse,
+          instructor_id: user.id,
+        },
+      })
+      .then((res) => setApplications(res.data || []))
+      .catch(() => setApplications([]))
+      .finally(() => setLoading(false));
+  }, [selectedCourse, user.id]);
+
+  /* ======================================
+     3. APPROVE / REJECT
+  ====================================== */
   const handleAction = async (enrollmentId, action) => {
     try {
       await api.post("/instructor/approve-request", {
@@ -38,126 +64,110 @@ export default function InstructorDashboard() {
       setApplications((prev) =>
         prev.filter((a) => a.enrollment_id !== enrollmentId)
       );
-    } catch (err) {
-      alert("Failed to update enrollment");
+    } catch {
+      alert("Failed to update enrollment status");
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* 🔵 BLUE NAVBAR */}
+      {/* NAVBAR */}
       <nav className="bg-blue-600 text-white shadow px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">
-          👨‍🏫 Instructor Dashboard
-        </h1>
+        <h1 className="text-xl font-bold">👨‍🏫 Instructor Dashboard</h1>
 
         <div className="flex gap-6 items-center">
-          <button
-            onClick={() => setActiveTab("approvals")}
-            className={`font-medium ${
-              activeTab === "approvals" && "underline"
-            }`}
-          >
+          <NavBtn active={activeTab === "approvals"} onClick={() => setActiveTab("approvals")}>
             Approvals
-          </button>
+          </NavBtn>
 
-          <button
-            onClick={() => setActiveTab("float")}
-            className={`font-medium ${
-              activeTab === "float" && "underline"
-            }`}
-          >
+          <NavBtn active={activeTab === "float"} onClick={() => setActiveTab("float")}>
             Float Course
-          </button>
+          </NavBtn>
 
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`font-medium ${
-              activeTab === "profile" && "underline"
-            }`}
-          >
+          <NavBtn active={activeTab === "profile"} onClick={() => setActiveTab("profile")}>
             Profile
-          </button>
+          </NavBtn>
 
-          <span className="opacity-90">{user?.name}</span>
+          <span>{user?.name}</span>
 
-          <button
-            onClick={logout}
-            className="bg-red-500 px-3 py-1 rounded"
-          >
+          <button onClick={logout} className="bg-red-500 px-3 py-1 rounded">
             Logout
           </button>
         </div>
       </nav>
 
-      {/* ============================
-          CONTENT
-      ============================ */}
+      {/* CONTENT */}
       <div className="p-6">
-        {/* ---------- APPROVALS ---------- */}
         {activeTab === "approvals" && (
-          <div className="max-w-3xl">
+          <div className="max-w-4xl">
             <h2 className="text-lg font-bold mb-4">
               Pending Student Applications
             </h2>
 
-            {applications.length === 0 ? (
+            {/* COURSE SELECT */}
+            <select
+              className="border px-3 py-2 rounded w-full mb-4"
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+            >
+              <option value="">-- Select Course --</option>
+              {courses.map((c) => (
+                <option key={c.course_id} value={c.course_id}>
+                  {c.course_code} - {c.title}
+                </option>
+              ))}
+            </select>
+
+            {!selectedCourse ? (
+              <p className="text-gray-600">
+                Select a course to view applications.
+              </p>
+            ) : loading ? (
+              <p className="text-gray-600">Loading applications...</p>
+            ) : applications.length === 0 ? (
               <p className="text-gray-600">No pending applications.</p>
             ) : (
-              applications.map((a) => {
-                // ✅ SAFE student extraction (fixes your error)
-                const student = a.student || a.users || {};
-
-                return (
-                  <div
-                    key={a.enrollment_id}
-                    className="bg-white p-4 shadow rounded mb-3 flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="font-semibold">
-                        {student.full_name || "Unknown Student"}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {student.email || "—"}
-                      </p>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() =>
-                          handleAction(a.enrollment_id, "ACCEPT")
-                        }
-                        className="bg-green-600 text-white px-3 py-1 rounded"
-                      >
-                        Accept
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          handleAction(a.enrollment_id, "REJECT")
-                        }
-                        className="bg-red-600 text-white px-3 py-1 rounded"
-                      >
-                        Reject
-                      </button>
-                    </div>
+              applications.map((a) => (
+                <div
+                  key={a.enrollment_id}
+                  className="bg-white p-4 shadow rounded mb-3 flex justify-between items-center"
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {a.student?.full_name}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {a.student?.email}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Status: {a.status}
+                    </p>
                   </div>
-                );
-              })
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAction(a.enrollment_id, "ACCEPT")}
+                      className="bg-green-600 text-white px-3 py-1 rounded"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleAction(a.enrollment_id, "REJECT")}
+                      className="bg-red-600 text-white px-3 py-1 rounded"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
 
-        {/* ---------- FLOAT COURSE ---------- */}
         {activeTab === "float" && <FloatCourse />}
 
-        {/* ---------- PROFILE ---------- */}
         {activeTab === "profile" && (
           <div className="bg-white p-6 shadow rounded max-w-xl">
-            <h2 className="text-lg font-bold mb-4">
-              Instructor Profile
-            </h2>
-
             <ProfileItem label="Name" value={user?.name} />
             <ProfileItem label="Role" value={user?.role} />
             <ProfileItem label="User ID" value={user?.id} />
@@ -168,9 +178,16 @@ export default function InstructorDashboard() {
   );
 }
 
-// ============================
-// Profile Row Component
-// ============================
+/* ------------------ Helpers ------------------ */
+
+function NavBtn({ active, children, ...props }) {
+  return (
+    <button {...props} className={`font-medium ${active ? "underline" : ""}`}>
+      {children}
+    </button>
+  );
+}
+
 function ProfileItem({ label, value }) {
   return (
     <div className="mb-3">

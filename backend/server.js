@@ -11,7 +11,7 @@ const instructorRoutes = require('./routes/instructorRoutes');
 const advisorRoutes = require('./routes/advisorRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const courseRoutes = require('./routes/courseRoutes');
-const userRoutes = require('./routes/userRoutes'); // ✅ users API
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
@@ -36,11 +36,11 @@ app.use('/api/users', userRoutes);
 // HEALTH CHECK
 // ============================
 app.get('/', (req, res) => {
-  res.send('🚀 AIMS-Lite Backend is running');
+  res.status(200).send('🚀 AIMS-Lite Backend is running');
 });
 
 // ============================
-// 404 HANDLER (VERY USEFUL)
+// GLOBAL 404 HANDLER
 // ============================
 app.use((req, res) => {
   res.status(404).json({

@@ -14,55 +14,66 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Navbar */}
-      <nav className="bg-white shadow px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold text-blue-600">
+      {/* 🔵 BLUE NAVBAR */}
+      <nav className="bg-blue-600 text-white shadow px-6 py-4 flex justify-between items-center">
+        <h1 className="text-xl font-bold">
           🎓 Student Dashboard
         </h1>
 
         <div className="flex gap-6 items-center">
-          <button
+          <NavButton
+            label="Courses"
+            active={activeTab === "courses"}
             onClick={() => setActiveTab("courses")}
-            className={`font-medium ${
-              activeTab === "courses" && "text-blue-600"
-            }`}
-          >
-            Courses
-          </button>
-          <button
+          />
+          <NavButton
+            label="Profile"
+            active={activeTab === "profile"}
             onClick={() => setActiveTab("profile")}
-            className={`font-medium ${
-              activeTab === "profile" && "text-blue-600"
-            }`}
-          >
-            Profile
-          </button>
-          <button
+          />
+          <NavButton
+            label="Records"
+            active={activeTab === "records"}
             onClick={() => setActiveTab("records")}
-            className={`font-medium ${
-              activeTab === "records" && "text-blue-600"
-            }`}
-          >
-            Records
-          </button>
+          />
 
-          <span className="text-gray-600">{user.name}</span>
+          <span className="opacity-90">
+            {user?.name || "Student"}
+          </span>
 
           <button
             onClick={logout}
-            className="bg-red-500 text-white px-3 py-1 rounded"
+            className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded"
           >
             Logout
           </button>
         </div>
       </nav>
 
-      {/* Content */}
+      {/* CONTENT */}
       <div className="p-6">
         {activeTab === "courses" && <Courses />}
         {activeTab === "profile" && <StudentProfile />}
         {activeTab === "records" && <StudentRecords />}
       </div>
     </div>
+  );
+}
+
+/* ---------------------------
+   Reusable Nav Button
+---------------------------- */
+function NavButton({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`font-medium transition ${
+        active
+          ? "underline underline-offset-4"
+          : "opacity-90 hover:opacity-100"
+      }`}
+    >
+      {label}
+    </button>
   );
 }

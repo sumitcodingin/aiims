@@ -22,25 +22,14 @@ exports.searchCourses = async (req, res) => {
           email
         )
       `)
-      // 🔒 IMPORTANT: students see ONLY approved courses
+      // Students see ONLY approved courses
       .eq('status', 'APPROVED');
 
-    // Filters
-    if (dept) {
-      query = query.ilike('department', `%${dept}%`);
-    }
-
-    if (session) {
-      query = query.eq('acad_session', session);
-    }
-
-    if (code) {
-      query = query.ilike('course_code', `%${code}%`);
-    }
-
-    if (title) {
-      query = query.ilike('title', `%${title}%`);
-    }
+    // STRING FILTERS ONLY
+    if (dept) query = query.ilike('department', `%${dept}%`);
+    if (session) query = query.eq('acad_session', session);
+    if (code) query = query.ilike('course_code', `%${code}%`);
+    if (title) query = query.ilike('title', `%${title}%`);
 
     const { data, error } = await query;
 
@@ -49,7 +38,12 @@ exports.searchCourses = async (req, res) => {
       return res.status(500).json({ error: "Search failed." });
     }
 
-    res.status(200).json(data);
+    // 🔒 FILTER OUT FULL COURSES SAFELY
+    const availableCourses = data.filter(
+      (c) => c.enrolled_count < c.capacity
+    );
+
+    res.status(200).json(availableCourses);
   } catch (err) {
     console.error("SEARCH COURSES ERROR:", err);
     res.status(500).json({ error: "Search failed." });
@@ -57,7 +51,7 @@ exports.searchCourses = async (req, res) => {
 };
 
 // ============================
-// 2. Get Course Members
+// 2. Get Course Members (ENROLLED ONLY)
 // ============================
 exports.getCourseMembers = async (req, res) => {
   const { courseId } = req.params;
@@ -67,7 +61,6 @@ exports.getCourseMembers = async (req, res) => {
       .from('enrollments')
       .select(`
         enrollment_id,
-        status,
         grade,
         student:users (
           full_name,
@@ -79,14 +72,15 @@ exports.getCourseMembers = async (req, res) => {
           )
         )
       `)
-      .eq('course_id', courseId);
+      .eq('course_id', courseId)
+      .eq('status', 'ENROLLED');
 
     if (error) throw error;
 
     res.status(200).json({
       course_id: courseId,
       total_members: data.length,
-      members: data
+      members: data,
     });
   } catch (err) {
     console.error("GET COURSE MEMBERS ERROR:", err);

@@ -2,81 +2,127 @@ import { useEffect, useState } from "react";
 import api from "../../services/api";
 
 export default function AdvisorApprovals() {
-  const [requests, setRequests] = useState([]);
   const user = JSON.parse(localStorage.getItem("user"));
 
-  useEffect(() => {
-    // NOTE:
-    // If later you add a GET endpoint, replace this.
-    // For now we mock empty until backend provides list.
-    setRequests([]);
-  }, []);
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [students, setStudents] = useState([]);
 
-  const handleAction = async (enrollmentId, action) => {
+  /* ===============================
+     1. Fetch courses for advisor
+  =============================== */
+  useEffect(() => {
+    api
+      .get("/advisor/courses", {
+        params: { advisor_id: user.id },
+      })
+      .then((res) => setCourses(res.data || []))
+      .catch(() => setCourses([]));
+  }, [user.id]);
+
+  /* ===============================
+     2. Fetch students for course
+  =============================== */
+  const fetchStudents = async (courseId) => {
+    setSelectedCourse(courseId);
+
     try {
-      await api.post("/advisor/approve-request", {
-        enrollmentId,
-        action,
-        advisor_id: user.id,
+      const res = await api.get("/advisor/pending-students", {
+        params: {
+          advisor_id: user.id,
+          course_id: courseId,
+        },
       });
 
-      setRequests(
-        requests.filter(r => r.enrollment_id !== enrollmentId)
-      );
+      setStudents(res.data || []);
     } catch (err) {
-      alert(
-        err.response?.data?.error ||
-        "Failed to update approval"
-      );
+      console.error("FETCH STUDENTS ERROR:", err);
+      setStudents([]);
     }
   };
 
+  /* ===============================
+     3. Approve / Reject student
+  =============================== */
+  const handleAction = async (enrollmentId, action) => {
+    await api.post("/advisor/approve-request", {
+      enrollmentId,
+      action,
+      advisor_id: user.id,
+    });
+
+    setStudents((prev) =>
+      prev.filter((s) => s.enrollment_id !== enrollmentId)
+    );
+  };
+
   return (
-    <div className="p-6">
+    <div className="max-w-4xl">
       <h2 className="text-xl font-bold mb-4">
         Pending Advisor Approvals
       </h2>
 
-      {requests.length === 0 ? (
-        <p className="text-gray-600">
-          No pending approvals.
-        </p>
-      ) : (
-        requests.map(req => (
-          <div
-            key={req.enrollment_id}
-            className="bg-white p-4 rounded shadow mb-3 flex justify-between"
-          >
-            <div>
-              <p className="font-semibold">
-                {req.student_name}
-              </p>
-              <p className="text-sm text-gray-600">
-                {req.course_title}
-              </p>
-            </div>
+      {/* COURSE SELECTOR */}
+      <select
+        className="border p-2 rounded mb-6 w-full"
+        onChange={(e) => fetchStudents(e.target.value)}
+        defaultValue=""
+      >
+        <option value="" disabled>
+          Select Course
+        </option>
+        {courses.map((c) => (
+          <option key={c.course_id} value={c.course_id}>
+            {c.course_code} - {c.title}
+          </option>
+        ))}
+      </select>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() =>
-                  handleAction(req.enrollment_id, "ACCEPT")
-                }
-                className="bg-green-600 text-white px-3 py-1 rounded"
+      {/* STUDENT LIST */}
+      {selectedCourse && (
+        <>
+          {students.length === 0 ? (
+            <p className="text-gray-600">
+              No pending students for this course.
+            </p>
+          ) : (
+            students.map((s) => (
+              <div
+                key={s.enrollment_id}
+                className="bg-white p-4 shadow rounded mb-3 flex justify-between items-center"
               >
-                Accept
-              </button>
+                <div>
+                  <p className="font-semibold">{s.student.full_name}</p>
+                  <p className="text-sm text-gray-600">
+                    {s.student.email}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Dept: {s.student.department}
+                  </p>
+                </div>
 
-              <button
-                onClick={() =>
-                  handleAction(req.enrollment_id, "REJECT")
-                }
-                className="bg-red-600 text-white px-3 py-1 rounded"
-              >
-                Reject
-              </button>
-            </div>
-          </div>
-        ))
+                <div className="flex gap-2">
+                  <button
+                    onClick={() =>
+                      handleAction(s.enrollment_id, "ACCEPT")
+                    }
+                    className="bg-green-600 text-white px-3 py-1 rounded"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleAction(s.enrollment_id, "REJECT")
+                    }
+                    className="bg-red-600 text-white px-3 py-1 rounded"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </>
       )}
     </div>
   );
