@@ -12,6 +12,8 @@ export default function VerifyOtp() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [timer, setTimer] = useState(30);
+
   // Persist email so refresh doesn't break
   useEffect(() => {
     if (emailFromState) {
@@ -23,6 +25,14 @@ export default function VerifyOtp() {
       }
     }
   }, [emailFromState]);
+
+  useEffect(() => {
+    let interval;
+    if (timer > 0) {
+      interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timer]);
 
   // If email is missing completely
   if (!email) {
@@ -76,6 +86,16 @@ export default function VerifyOtp() {
     }
   };
 
+  const resendOtp = async () => {
+    try {
+      await api.post("/auth/request-otp", { email });
+      setTimer(30); // Reset timer
+      alert("New OTP sent to your email!");
+    } catch (err) {
+      alert("Failed to resend OTP");
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-xl shadow-lg w-96">
@@ -103,6 +123,26 @@ export default function VerifyOtp() {
         >
           {loading ? "Verifying..." : "Verify & Login"}
         </button>
+
+        <div className="mt-6 flex flex-col gap-3">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-500">Didn't receive code?</span>
+            <button
+              onClick={resendOtp}
+              disabled={timer > 0}
+              className={`font-semibold ${timer > 0 ? "text-gray-400" : "text-blue-600 hover:underline"}`}
+            >
+              {timer > 0 ? `Resend in ${timer}s` : "Resend OTP"}
+            </button>
+          </div>
+
+          <button
+            onClick={() => navigate("/", { replace: true })}
+            className="w-full text-gray-600 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition"
+          >
+            Change Email
+          </button>
+        </div>
       </div>
     </div>
   );
