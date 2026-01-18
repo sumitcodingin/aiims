@@ -1,6 +1,8 @@
 const supabase = require('../supabaseClient');
 
-// View applications for a course
+// ============================
+// 1. View applications for a course
+// ============================
 const getCourseApplications = async (req, res) => {
   const { courseId } = req.params;
 
@@ -11,7 +13,8 @@ const getCourseApplications = async (req, res) => {
         enrollment_id,
         status,
         grade,
-        users (
+        student:users (
+          user_id,
           full_name,
           email,
           department
@@ -21,31 +24,106 @@ const getCourseApplications = async (req, res) => {
 
     if (error) throw error;
 
-    res.json(data);
+    res.status(200).json(data);
   } catch (err) {
+    console.error("GET APPLICATIONS ERROR:", err);
     res.status(500).json({ error: "Failed to fetch applications." });
   }
 };
 
-// Award grade
+// ============================
+// 2. Award grade (Instructor)
+// ============================
 const awardGrade = async (req, res) => {
   const { enrollmentId, grade } = req.body;
 
   try {
     const { error } = await supabase
       .from('enrollments')
-      .update({ grade, status: 'ENROLLED' })
+      .update({
+        grade: grade,
+        status: 'ENROLLED'
+      })
       .eq('enrollment_id', enrollmentId);
 
     if (error) throw error;
 
-    res.json({ message: "Grade awarded successfully." });
+    res.status(200).json({ message: "Grade awarded successfully." });
   } catch (err) {
+    console.error("AWARD GRADE ERROR:", err);
     res.status(500).json({ error: "Failed to award grade." });
+  }
+};
+
+// ============================
+// 3. Approve / Reject by Instructor
+// ============================
+const approveByInstructor = async (req, res) => {
+  const { enrollmentId, action, instructor_id } = req.body;
+
+  try {
+    // 1. Fetch enrollment + course info
+    const { data: enrollment, error } = await supabase
+      .from('enrollments')
+      .select(`
+        status,
+        course:courses (
+          faculty_id
+        )
+      `)
+      .eq('enrollment_id', enrollmentId)
+      .single();
+
+    if (error || !enrollment) {
+      return res.status(404).json({ error: "Enrollment record not found." });
+    }
+
+    // 2. Ownership check
+    if (enrollment.course.faculty_id !== instructor_id) {
+      return res.status(403).json({
+        error: "Unauthorized. You are not the instructor for this course."
+      });
+    }
+
+    // 3. Lock invalid transitions
+    if (enrollment.status === 'DROPPED_BY_STUDENT') {
+      return res.status(400).json({
+        error: "Action locked. Student has already dropped this course."
+      });
+    }
+
+    if (enrollment.status === 'ADVISOR_REJECTED') {
+      return res.status(400).json({
+        error: "Action locked. Advisor has already rejected this request."
+      });
+    }
+
+    // 4. Decide new status
+    const newStatus =
+      action === 'ACCEPT'
+        ? 'PENDING_ADVISOR_APPROVAL'
+        : 'INSTRUCTOR_REJECTED';
+
+    // 5. Update enrollment
+    const { error: updateError } = await supabase
+      .from('enrollments')
+      .update({ status: newStatus })
+      .eq('enrollment_id', enrollmentId);
+
+    if (updateError) throw updateError;
+
+    res.status(200).json({
+      message: "Instructor decision updated successfully.",
+      status: newStatus
+    });
+  } catch (err) {
+    console.error("INSTRUCTOR APPROVAL ERROR:", err);
+    res.status(500).json({ error: "Failed to process instructor decision." });
   }
 };
 
 module.exports = {
   getCourseApplications,
-  awardGrade
+  awardGrade,
+  approveByInstructor
 };

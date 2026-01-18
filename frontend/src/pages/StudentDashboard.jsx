@@ -1,26 +1,67 @@
-import { useEffect, useState } from "react";
-import api from "../services/api";
+import { useState } from "react";
+import Courses from "./student/Courses";
+import StudentProfile from "./student/StudentProfile";
+import StudentRecords from "./student/StudentRecords";
 
 export default function StudentDashboard() {
-  const [courses, setCourses] = useState([]);
+  const [activeTab, setActiveTab] = useState("courses");
+  const user = JSON.parse(localStorage.getItem("user"));
 
-  useEffect(() => {
-    api.get("/courses/search").then((res) => setCourses(res.data));
-  }, []);
+  const logout = () => {
+    localStorage.removeItem("user");
+    window.location.href = "/";
+  };
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-4">Student Dashboard</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {courses.map((c) => (
-          <div key={c.course_id} className="border p-4 rounded shadow">
-            <h3 className="font-bold">{c.title}</h3>
-            <p>{c.course_code}</p>
-            <button className="mt-2 bg-blue-600 text-white px-4 py-1 rounded">
-              Apply
-            </button>
-          </div>
-        ))}
+    <div className="min-h-screen bg-gray-100">
+      {/* Navbar */}
+      <nav className="bg-white shadow px-6 py-4 flex justify-between items-center">
+        <h1 className="text-xl font-bold text-blue-600">
+          🎓 Student Dashboard
+        </h1>
+
+        <div className="flex gap-6 items-center">
+          <button
+            onClick={() => setActiveTab("courses")}
+            className={`font-medium ${
+              activeTab === "courses" && "text-blue-600"
+            }`}
+          >
+            Courses
+          </button>
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={`font-medium ${
+              activeTab === "profile" && "text-blue-600"
+            }`}
+          >
+            Profile
+          </button>
+          <button
+            onClick={() => setActiveTab("records")}
+            className={`font-medium ${
+              activeTab === "records" && "text-blue-600"
+            }`}
+          >
+            Records
+          </button>
+
+          <span className="text-gray-600">{user.name}</span>
+
+          <button
+            onClick={logout}
+            className="bg-red-500 text-white px-3 py-1 rounded"
+          >
+            Logout
+          </button>
+        </div>
+      </nav>
+
+      {/* Content */}
+      <div className="p-6">
+        {activeTab === "courses" && <Courses />}
+        {activeTab === "profile" && <StudentProfile />}
+        {activeTab === "records" && <StudentRecords />}
       </div>
     </div>
   );

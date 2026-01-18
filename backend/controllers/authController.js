@@ -2,7 +2,7 @@ const supabase = require('../supabaseClient');
 const { sendOTPEmail } = require('../utils/mailer');
 
 // ============================
-// STEP 1: REQUEST OTP
+// STEP 1: REQUEST OTP (NO EXPIRY)
 // ============================
 exports.requestOTP = async (req, res) => {
   const { email } = req.body;
@@ -28,14 +28,14 @@ exports.requestOTP = async (req, res) => {
       .delete()
       .eq('email', email);
 
-    // 4. Store new OTP (NO expiry)
+    // 4. Store new OTP (NO EXPIRY)
     const { error: insertError } = await supabase
       .from('otp_store')
       .insert([
         {
           email: email,
-          otp_code: otp,
-        },
+          otp_code: otp
+        }
       ]);
 
     if (insertError) {
@@ -54,13 +54,13 @@ exports.requestOTP = async (req, res) => {
 };
 
 // ============================
-// STEP 2: VERIFY OTP
+// STEP 2: VERIFY OTP (NO EXPIRY)
 // ============================
 exports.verifyOTP = async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-    // 1. Validate OTP (NO EXPIRY CHECK)
+    // 1. Validate OTP
     const { data: record, error: otpError } = await supabase
       .from('otp_store')
       .select('*')
@@ -95,8 +95,8 @@ exports.verifyOTP = async (req, res) => {
       user: {
         id: user.user_id,
         name: user.full_name,
-        role: user.role,
-      },
+        role: user.role
+      }
     });
   } catch (err) {
     console.error("VERIFY OTP ERROR:", err);

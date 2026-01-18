@@ -6,7 +6,7 @@ export default function VerifyOtp() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Get email from router state OR localStorage
+  // Email from router state OR localStorage
   const emailFromState = location.state?.email;
   const [email, setEmail] = useState(emailFromState || "");
   const [otp, setOtp] = useState("");
@@ -43,6 +43,9 @@ export default function VerifyOtp() {
     );
   }
 
+  // ============================
+  // VERIFY OTP HANDLER
+  // ============================
   const verifyOtp = async () => {
     if (!otp) {
       alert("Please enter OTP");
@@ -52,19 +55,21 @@ export default function VerifyOtp() {
     setLoading(true);
 
     try {
-      await api.post("/auth/verify-otp", {
+      const res = await api.post("/auth/verify-otp", {
         email,
         otp,
       });
 
-      // OTP verified → clean up
+      // Save logged-in user
+      localStorage.setItem("user", JSON.stringify(res.data.user));
       localStorage.removeItem("otp_email");
 
-      navigate("/home");
+      // IMPORTANT: force reload so ProtectedRoute reads localStorage
+      window.location.href = "/dashboard";
     } catch (err) {
       alert(
         err.response?.data?.error ||
-        "OTP verification failed. Please try again."
+          "OTP verification failed. Please try again."
       );
     } finally {
       setLoading(false);

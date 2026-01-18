@@ -1,22 +1,29 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import EmailOtp from "./pages/EmailOtp";
 import VerifyOtp from "./pages/VerifyOtp";
-import Home from "./pages/Home";
-import StudentDashboard from "./pages/StudentDashboard";
-import InstructorDashboard from "./pages/InstructorDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
+import DashboardRouter from "./pages/DashboardRouter";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Auth */}
         <Route path="/" element={<EmailOtp />} />
         <Route path="/verify" element={<VerifyOtp />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/student" element={<StudentDashboard />} />
-        <Route path="/instructor" element={<InstructorDashboard />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="*" element={<Navigate to="/" />} />
+
+        {/* Role-based Dashboard */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardRouter />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
