@@ -6,27 +6,52 @@ export default function StudentProfile() {
   const user = JSON.parse(localStorage.getItem("user"));
 
   useEffect(() => {
-    // Using enrollments join to fetch profile data
-    api.get("/student/profile", {
-      params: { student_id: user.id }
-    }).then(res => setProfile(res.data));
+    api
+      .get("/student/profile", {
+        params: { student_id: user.id },
+      })
+      .then((res) => setProfile(res.data));
   }, [user.id]);
 
   if (!profile) {
-    return <p>Loading profile...</p>;
+    return <p className="text-gray-600">Loading profile...</p>;
   }
 
   return (
-    <div className="bg-white p-6 shadow rounded max-w-xl">
-      <h2 className="text-xl font-bold mb-4">Student Profile</h2>
+    <div className="max-w-2xl bg-white shadow rounded p-6">
+      <h2 className="text-2xl font-bold mb-6">Student Profile</h2>
 
-      <div className="space-y-2">
-        <p><b>Name:</b> {profile.full_name}</p>
-        <p><b>Email:</b> {profile.email}</p>
-        <p><b>Department:</b> {profile.department}</p>
-        <p><b>Batch:</b> {profile.batch}</p>
-        <p><b>Entry No:</b> {profile.entry_no}</p>
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <ProfileItem label="Full Name" value={profile.full_name} />
+        <ProfileItem label="Email" value={profile.email} />
+        <ProfileItem label="Role" value={profile.role} />
+        <ProfileItem label="Department" value={profile.department || "—"} />
+        <ProfileItem
+          label="Batch"
+          value={profile.student_profile?.batch || "—"}
+        />
+        <ProfileItem
+          label="Entry Number"
+          value={profile.student_profile?.entry_no || "—"}
+        />
+        <ProfileItem
+          label="Advisor"
+          value={profile.advisor?.full_name || "Not Assigned"}
+        />
+        <ProfileItem
+          label="Account Created"
+          value={new Date(profile.created_at).toLocaleDateString()}
+        />
       </div>
+    </div>
+  );
+}
+
+function ProfileItem({ label, value }) {
+  return (
+    <div>
+      <p className="text-gray-500">{label}</p>
+      <p className="font-medium">{value}</p>
     </div>
   );
 }
