@@ -4,7 +4,8 @@ const {
   approveByAdvisor,
   getAdvisorCourses,
   getPendingStudentsForCourse,
-  approveCourse
+  approveCourse,
+  getPendingCourses
 } = require("../controllers/advisorController");
 
 /* ===============================
@@ -23,6 +24,7 @@ router.get("/pending-students", getPendingStudentsForCourse);
 /* ===============================
    COURSE APPROVAL
 ================================ */
+router.get("/pending-courses", getPendingCourses);
 
 // POST /api/advisor/approve-course
 router.post("/approve-course", approveCourse);

@@ -23,7 +23,7 @@ export default function InstructorDashboard() {
     if (activeTab !== "approvals") return;
 
     api
-      .get("/instructor/my-courses", {
+      .get("/instructor/courses", {
         params: { instructor_id: user.id },
       })
       .then((res) => setCourses(res.data || []))
@@ -39,7 +39,7 @@ export default function InstructorDashboard() {
     setLoading(true);
 
     api
-      .get("/instructor/pending-applications", {
+      .get("/instructor/applications", {
         params: {
           course_id: selectedCourse,
           instructor_id: user.id,

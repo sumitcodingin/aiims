@@ -210,3 +210,49 @@ exports.approveCourse = async (req, res) => {
     res.status(500).json({ error: "Course approval failed." });
   }
 };
+
+/* ===================================================
+   5. Get FLOATED COURSES pending advisor approval
+=================================================== */
+exports.getPendingCourses = async (req, res) => {
+  const { advisor_id } = req.query;
+
+  try {
+    // 1. Identify the advisor's department to filter relevant courses
+    const { data: advisor } = await supabase
+      .from("users")
+      .select("department")
+      .eq("user_id", advisor_id)
+      .single();
+
+    if (!advisor) {
+      return res.status(404).json({ error: "Advisor not found." });
+    }
+
+    // 2. Fetch courses in the advisor's department with PENDING_ADVISOR_APPROVAL status
+    const { data: courses, error } = await supabase
+      .from("courses")
+      .select(`
+        course_id,
+        course_code,
+        title,
+        acad_session,
+        capacity,
+        department,
+        status,
+        instructor:users!faculty_id (
+          full_name,
+          email
+        )
+      `)
+      .eq("department", advisor.department)
+      .eq("status", "PENDING_ADVISOR_APPROVAL");
+
+    if (error) throw error;
+
+    res.json(courses || []);
+  } catch (err) {
+    console.error("GET PENDING COURSES ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch pending courses." });
+  }
+};

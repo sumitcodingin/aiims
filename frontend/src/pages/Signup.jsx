@@ -89,6 +89,11 @@ export default function Signup() {
           <option value="Electrical">Electrical</option>
           <option value="Mechanical">Mechanical</option>
           <option value="Civil">Civil</option>
+          <option value="Chemical">Chemical</option>
+          <option value="Math">Math</option>
+          <option value="Physics">Physics</option>
+          <option value="Metallurgy">Metallurgy</option>
+          <option value="HSS">HSS</option>
         </select>
 
         {/* Send OTP */}
