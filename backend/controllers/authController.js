@@ -93,6 +93,13 @@ exports.requestSignupOTP = async (req, res) => {
   const { email, full_name, role, department } = req.body;
 
   try {
+    // Validate email domain
+    if (!email || !email.endsWith("@iitrpr.ac.in")) {
+      return res.status(400).json({ 
+        error: "Email must be from IIT Ropar domain (@iitrpr.ac.in)" 
+      });
+    }
+
     if (role === "Admin") {
       return res.status(403).json({ error: "Admin signup not allowed." });
     }
@@ -136,6 +143,13 @@ exports.verifySignupOTP = async (req, res) => {
   const { email, otp, full_name, role, department } = req.body;
 
   try {
+    // Validate email domain (defense in depth)
+    if (!email || !email.endsWith("@iitrpr.ac.in")) {
+      return res.status(400).json({ 
+        error: "Email must be from IIT Ropar domain (@iitrpr.ac.in)" 
+      });
+    }
+
     const { data: record } = await supabase
       .from('otp_store')
       .select('*')

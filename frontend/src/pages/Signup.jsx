@@ -18,6 +18,12 @@ export default function Signup() {
       return;
     }
 
+    // Validate email domain
+    if (!form.email.endsWith("@iitrpr.ac.in")) {
+      alert("Email must be from IIT Ropar domain (@iitrpr.ac.in)");
+      return;
+    }
+
     try {
       await api.post("/auth/signup/request-otp", form);
       navigate("/verify-signup", { state: form });
@@ -47,7 +53,7 @@ export default function Signup() {
         <input
           type="email"
           className="w-full border p-2 mb-3"
-          placeholder="Email"
+          placeholder="Email (@iitrpr.ac.in)"
           value={form.email}
           onChange={(e) =>
             setForm({ ...form, email: e.target.value })
