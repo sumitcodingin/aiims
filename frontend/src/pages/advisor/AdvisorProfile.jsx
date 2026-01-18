@@ -1,5 +1,5 @@
 export default function AdvisorProfile() {
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user"));
 
   return (
     <div className="p-6 max-w-xl">

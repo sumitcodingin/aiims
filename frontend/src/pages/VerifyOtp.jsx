@@ -6,7 +6,7 @@ export default function VerifyOtp() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Email from router state OR localStorage
+  // Email from router state OR sessionStorage
   const emailFromState = location.state?.email;
   const [email, setEmail] = useState(emailFromState || "");
   const [otp, setOtp] = useState("");
@@ -15,9 +15,9 @@ export default function VerifyOtp() {
   // Persist email so refresh doesn't break
   useEffect(() => {
     if (emailFromState) {
-      localStorage.setItem("otp_email", emailFromState);
+      sessionStorage.setItem("otp_email", emailFromState);
     } else {
-      const savedEmail = localStorage.getItem("otp_email");
+      const savedEmail = sessionStorage.getItem("otp_email");
       if (savedEmail) {
         setEmail(savedEmail);
       }
@@ -61,8 +61,8 @@ export default function VerifyOtp() {
       });
 
       // Save logged-in user
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      localStorage.removeItem("otp_email");
+      sessionStorage.setItem("user", JSON.stringify(res.data.user));
+      sessionStorage.removeItem("otp_email");
 
       // Navigate to dashboard (ProtectedRoute will allow)
       navigate("/dashboard", { replace: true });

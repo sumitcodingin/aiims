@@ -4,7 +4,7 @@ import api from "../../services/api";
 export default function Courses() {
   const [courses, setCourses] = useState([]);
   const [appliedMap, setAppliedMap] = useState({});
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user"));
 
   // Fetch approved courses
   useEffect(() => {

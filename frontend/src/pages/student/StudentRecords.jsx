@@ -4,7 +4,7 @@ import api from "../../services/api";
 export default function StudentRecords() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user"));
 
   const CURRENT_SESSION = "2025-II"; // 🔴 can be dynamic later
 

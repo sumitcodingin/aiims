@@ -9,7 +9,7 @@ export default function DashboardRouter() {
   let user = null;
 
   try {
-    user = JSON.parse(localStorage.getItem("user"));
+    user = JSON.parse(sessionStorage.getItem("user"));
   } catch {
     user = null;
   }

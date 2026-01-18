@@ -3,7 +3,7 @@ import api from "../../services/api";
 
 export default function StudentProfile() {
   const [profile, setProfile] = useState(null);
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user"));
 
   useEffect(() => {
     api

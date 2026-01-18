@@ -5,10 +5,10 @@ import StudentRecords from "./student/StudentRecords";
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("courses");
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user"));
 
   const logout = () => {
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("user");
     window.location.href = "/";
   };
 

@@ -47,7 +47,7 @@ export default function VerifySignupOtp() {
       });
 
       // Save logged-in user (IMPORTANT for ProtectedRoute)
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      sessionStorage.setItem("user", JSON.stringify(res.data.user));
 
       // Redirect to dashboard
       navigate("/dashboard", { replace: true });

@@ -1,5 +1,5 @@
 export default function InstructorProfile() {
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user"));
 
   return (
     <div className="max-w-xl bg-white p-6 shadow rounded">

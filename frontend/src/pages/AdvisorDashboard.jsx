@@ -13,10 +13,10 @@ export default function AdvisorDashboard() {
   const [pendingCourses, setPendingCourses] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user"));
 
   const logout = () => {
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("user");
     window.location.href = "/";
   };
 

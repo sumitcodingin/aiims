@@ -2,7 +2,7 @@ import { useState } from "react";
 import api from "../../services/api";
 
 export default function FloatCourse() {
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user"));
   const [form, setForm] = useState({
     course_code: "",
     title: "",
