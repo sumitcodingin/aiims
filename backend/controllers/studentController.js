@@ -7,7 +7,40 @@ exports.applyForCourse = async (req, res) => {
   const { student_id, course_id } = req.body;
 
   try {
-    const { error } = await supabase.from('enrollments').insert([
+    // 1. Check if an enrollment already exists for this student and course
+    const { data: existing, error: fetchError } = await supabase
+      .from('enrollments')
+      .select('enrollment_id, status')
+      .eq('student_id', student_id)
+      .eq('course_id', course_id)
+      .maybeSingle(); // Use maybeSingle to avoid errors if no record is found
+
+    if (fetchError) throw fetchError;
+
+    if (existing) {
+      // 2. If it exists and was dropped, "re-activate" it
+      if (existing.status === 'DROPPED_BY_STUDENT') {
+        const { error: updateError } = await supabase
+          .from('enrollments')
+          .update({ 
+            status: 'PENDING_INSTRUCTOR_APPROVAL',
+            grade: null // Reset grade if they re-apply
+          })
+          .eq('enrollment_id', existing.enrollment_id);
+
+        if (updateError) throw updateError;
+        return res.json({ message: 'Re-application submitted successfully.' });
+      } else {
+        // If they are already enrolled or pending, block the request
+        return res.status(400).json({ 
+          error: 'Invalid Action', 
+          message: 'You already have an active application or enrollment for this course.' 
+        });
+      }
+    }
+
+    // 3. If no record exists, perform the standard insert
+    const { error: insertError } = await supabase.from('enrollments').insert([
       {
         student_id,
         course_id,
@@ -15,15 +48,7 @@ exports.applyForCourse = async (req, res) => {
       },
     ]);
 
-    if (error) {
-      if (error.code === '23505') {
-        return res.status(400).json({
-          error: 'Duplicate Application',
-          message: 'Already applied for this course.',
-        });
-      }
-      throw error;
-    }
+    if (insertError) throw insertError;
 
     res.status(201).json({
       message: 'Application submitted. Awaiting instructor approval.',
