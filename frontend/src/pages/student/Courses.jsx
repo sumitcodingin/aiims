@@ -4,6 +4,13 @@ import api from "../../services/api";
 export default function Courses() {
   const [courses, setCourses] = useState([]);
   const [appliedMap, setAppliedMap] = useState({});
+  const [search, setSearch] = useState({
+    code: "",
+    dept: "",
+    session: "2025-II", // Default session
+    title: "",
+    instructor: ""
+  });
   const user = JSON.parse(sessionStorage.getItem("user"));
 
   const CURRENT_SESSION = "2025-II";
@@ -11,29 +18,32 @@ export default function Courses() {
   // Fetch approved courses
   const fetchData = useCallback(async () => {
     try {
-      // Fetch all available courses
-      const coursesRes = await api.get("/courses/search");
+      // 🚀 Pass search state as query parameters
+      const coursesRes = await api.get("/courses/search", { params: search });
       setCourses(coursesRes.data || []);
 
-      // Fetch student's current enrollment records for this session
       const recordsRes = await api.get("/student/records", {
         params: { student_id: user.id, session: CURRENT_SESSION }
       });
 
-      // Create a map of course_id -> enrollment details
       const mapping = {};
       recordsRes.data.forEach(r => {
         mapping[r.courses.course_id] = r;
       });
       setAppliedMap(mapping);
     } catch (err) {
-      console.error("Failed to fetch courses or records:", err);
+      console.error("Failed to fetch data:", err);
     }
-  }, [user.id]); // Dependency for useCallback
+  }, [user.id, search]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Handle input changes
+  const handleChange = (e) => {
+    setSearch({ ...search, [e.target.name]: e.target.value });
+  };
 
   // Apply for course
   const apply = async (course_id) => {
@@ -100,6 +110,19 @@ export default function Courses() {
   return (
     <>
       <h2 className="text-2xl font-bold mb-4">Available Courses</h2>
+
+      {/* 🔍 SEARCH BAR SECTION */}
+      <div className="bg-white p-4 rounded-lg shadow border mb-6 grid grid-cols-2 md:grid-cols-5 gap-3">
+        <input name="code" placeholder="Course Code" className="border p-2 rounded text-sm" value={search.code} onChange={handleChange} />
+        <input name="title" placeholder="Course Title" className="border p-2 rounded text-sm" value={search.title} onChange={handleChange} />
+        <input name="dept" placeholder="Department" className="border p-2 rounded text-sm" value={search.dept} onChange={handleChange} />
+        <input name="instructor" placeholder="Instructor Name" className="border p-2 rounded text-sm" value={search.instructor} onChange={handleChange} />
+        <select name="session" className="border p-2 rounded text-sm" value={search.session} onChange={handleChange}>
+          <option value="2025-II">2025-II</option>
+          <option value="2025-I">2025-I</option>
+          <option value="2024-II">2024-II</option>
+        </select>
+      </div>
 
       {courses.length === 0 ? (
         <p className="text-gray-600">No courses available right now.</p>
