@@ -82,7 +82,9 @@ exports.getStudentRecords = async (req, res) => {
         enrollment_id,
         status,
         grade,
+        course_id,
         courses (
+          course_id,
           course_code,
           title,
           acad_session

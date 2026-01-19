@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import api from "../../services/api";
 
 export default function Courses() {
@@ -6,11 +6,34 @@ export default function Courses() {
   const [appliedMap, setAppliedMap] = useState({});
   const user = JSON.parse(sessionStorage.getItem("user"));
 
+  const CURRENT_SESSION = "2025-II";
+
   // Fetch approved courses
+  const fetchData = useCallback(async () => {
+    try {
+      // Fetch all available courses
+      const coursesRes = await api.get("/courses/search");
+      setCourses(coursesRes.data || []);
+
+      // Fetch student's current enrollment records for this session
+      const recordsRes = await api.get("/student/records", {
+        params: { student_id: user.id, session: CURRENT_SESSION }
+      });
+
+      // Create a map of course_id -> enrollment details
+      const mapping = {};
+      recordsRes.data.forEach(r => {
+        mapping[r.courses.course_id] = r;
+      });
+      setAppliedMap(mapping);
+    } catch (err) {
+      console.error("Failed to fetch courses or records:", err);
+    }
+  }, [user.id]); // Dependency for useCallback
+
   useEffect(() => {
-    api.get("/courses/search", { params: {} })
-.then((res) => setCourses(res.data));
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
   // Apply for course
   const apply = async (course_id) => {
@@ -19,16 +42,24 @@ export default function Courses() {
         student_id: user.id,
         course_id,
       });
-
-      // Optimistic UI update
-      setAppliedMap((prev) => ({
-        ...prev,
-        [course_id]: "PENDING_INSTRUCTOR_APPROVAL",
-      }));
-
-      alert("Application submitted. Awaiting instructor approval.");
+      alert("Application submitted.");
+      fetchData(); // Refresh data to update status and get enrollment_id
     } catch (err) {
       alert(err.response?.data?.message || "Already applied for this course.");
+    }
+  };
+
+  // drop course
+  const drop = async (enrollmentId) => {
+    if (!window.confirm("Are you sure you want to drop this course?")) return;
+
+    try {
+      // Using your specified endpoint
+      await api.post("/student/drop", { enrollmentId });
+      alert("Course dropped successfully.");
+      fetchData(); // Refresh to clear the map so "Apply" shows again
+    } catch (err) {
+      alert(err.response?.data?.error || "Drop failed.");
     }
   };
 
@@ -75,36 +106,50 @@ export default function Courses() {
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {courses.map((c) => {
-            const status = appliedMap[c.course_id];
+            const enrollment = appliedMap[c.course_id];
+            const status = enrollment?.status;
+
+            // Logic: Show Apply if never enrolled OR if they dropped
+            const canApply = !enrollment || status === "DROPPED_BY_STUDENT";
+
+            // Logic: Show Drop if applied and not rejected and not already dropped
+            const canDrop = enrollment && 
+                            status !== "DROPPED_BY_STUDENT" && 
+                            status !== "INSTRUCTOR_REJECTED" && 
+                            status !== "ADVISOR_REJECTED" &&
+                            enrollment.grade === null;
 
             return (
-              <div
-                key={c.course_id}
-                className="bg-white p-4 shadow rounded border"
-              >
-                <h3 className="font-bold text-lg">{c.title}</h3>
-                <p className="text-sm text-gray-600">{c.course_code}</p>
-                <p className="text-sm text-gray-700">
-                  Instructor: {c.instructor?.full_name || "—"}
-                </p>
+              <div key={c.course_id} className="bg-white p-4 shadow rounded border">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 className="font-bold text-lg">{c.title}</h3>
+                    <p className="text-sm text-gray-500">{c.course_code}</p>
+                    <p className="text-sm text-gray-700">Instructor: {c.instructor?.full_name || "—"}</p>
+                  </div>
+                  {/* 🚀 Status Reflected Here */}
+                  {enrollment && (
+                    <span className={`px-2 py-1 text-xs font-bold rounded ${statusColor(status)}`}>
+                      {statusText(status)}
+                    </span>
+                  )}
+                </div>
 
-                {/* STATUS OR APPLY */}
-                {status ? (
-                  <span
-                    className={`inline-block mt-3 px-3 py-1 text-sm rounded ${statusColor(
-                      status
-                    )}`}
-                  >
-                    {statusText(status)}
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => apply(c.course_id)}
-                    className="mt-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded"
-                  >
-                    Apply
-                  </button>
-                )}
+                <div className="flex gap-2 mt-4">
+                  {canApply && (
+                    <button onClick={() => apply(c.course_id)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm transition">
+                      Apply
+                    </button>
+                  )}
+
+                  {canDrop && (
+                    <button onClick={() => drop(enrollment.enrollment_id)}
+                      className="border border-red-600 text-red-600 hover:bg-red-50 px-4 py-1 rounded text-sm transition">
+                      Drop Course
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
