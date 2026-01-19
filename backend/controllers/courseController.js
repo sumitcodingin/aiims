@@ -90,3 +90,33 @@ exports.getCourseMembers = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch course members." });
   }
 };
+
+// ============================
+// 3. Get Public Course Enrollments (Show who applied)
+// ============================
+exports.getPublicCourseEnrollments = async (req, res) => {
+  const { courseId } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from('enrollments')
+      .select(`
+        status,
+        student:users (
+          full_name,
+          email,
+          department
+        )
+      `)
+      .eq('course_id', courseId)
+      // Show Enrolled and Pending students. Exclude dropped/rejected if you prefer.
+      .in('status', ['ENROLLED', 'PENDING_INSTRUCTOR_APPROVAL', 'PENDING_ADVISOR_APPROVAL']);
+
+    if (error) throw error;
+
+    res.status(200).json(data);
+  } catch (err) {
+    console.error("GET PUBLIC ENROLLMENTS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch enrollments." });
+  }
+};

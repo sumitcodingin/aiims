@@ -7,18 +7,31 @@ export default function Courses() {
   const [search, setSearch] = useState({
     code: "",
     dept: "",
-    session: "2025-II", // Default session
+    session: "2025-II",
     title: "",
     instructor: ""
   });
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  
+  // Modal State for Course Details
+  const [selectedCourse, setSelectedCourse] = useState(null);
 
+  // 🚀 MODAL STATE: Enrollment List & Metadata
+  const [enrollmentList, setEnrollmentList] = useState([]);
+  const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
+  
+  // 🚀 STATE: Stores Title, Enrolled Count (from list), and Capacity (from course)
+  const [viewingEnrollmentMeta, setViewingEnrollmentMeta] = useState({
+    title: "",
+    enrolledCount: 0,
+    capacity: 0
+  });
+
+  const user = JSON.parse(sessionStorage.getItem("user"));
   const CURRENT_SESSION = "2025-II";
 
   // Fetch approved courses
   const fetchData = useCallback(async () => {
     try {
-      // 🚀 Pass search state as query parameters
       const coursesRes = await api.get("/courses/search", { params: search });
       setCourses(coursesRes.data || []);
 
@@ -53,65 +66,102 @@ export default function Courses() {
         course_id,
       });
       alert("Application submitted.");
-      fetchData(); // Refresh data to update status and get enrollment_id
+      fetchData(); 
+      setSelectedCourse(null);
     } catch (err) {
       alert(err.response?.data?.message || "Already applied for this course.");
     }
   };
 
-  // drop course
+  // Drop course
   const drop = async (enrollmentId) => {
     if (!window.confirm("Are you sure you want to drop this course?")) return;
 
     try {
-      // Using your specified endpoint
       await api.post("/student/drop", { enrollmentId });
       alert("Course dropped successfully.");
-      fetchData(); // Refresh to clear the map so "Apply" shows again
+      fetchData();
+      setSelectedCourse(null);
     } catch (err) {
       alert(err.response?.data?.error || "Drop failed.");
+    }
+  };
+
+  // 🚀 UPDATED: Logic to show Enrolled / Capacity
+  const handleShowEnrollments = async (e, course) => {
+    e.stopPropagation(); 
+    try {
+      const res = await api.get(`/courses/${course.course_id}/public-enrollments`);
+      const list = res.data || [];
+      
+      // 1. Calculate how many are actually ENROLLED in the list
+      const enrolled = list.filter(r => r.status === 'ENROLLED').length;
+
+      setEnrollmentList(list);
+      
+      // 2. Store Metadata: Use 'enrolled' from list and 'capacity' from course object
+      setViewingEnrollmentMeta({
+        title: course.title,
+        enrolledCount: enrolled,
+        capacity: course.capacity // <--- Using Total Seats (Capacity)
+      });
+      
+      setShowEnrollmentModal(true);
+    } catch (err) {
+      alert("Failed to fetch enrollment list.");
     }
   };
 
   // Status label
   const statusText = (status) => {
     switch (status) {
-      case "PENDING_INSTRUCTOR_APPROVAL":
-        return "Pending Instructor Approval";
-      case "PENDING_ADVISOR_APPROVAL":
-        return "Pending Advisor Approval";
-      case "ENROLLED":
-        return "Enrolled";
-      case "INSTRUCTOR_REJECTED":
-        return "Rejected by Instructor";
-      case "ADVISOR_REJECTED":
-        return "Rejected by Advisor";
-      default:
-        return "";
+      case "PENDING_INSTRUCTOR_APPROVAL": return "Pending Instructor Approval";
+      case "PENDING_ADVISOR_APPROVAL": return "Pending Advisor Approval";
+      case "ENROLLED": return "Enrolled";
+      case "INSTRUCTOR_REJECTED": return "Rejected by Instructor";
+      case "ADVISOR_REJECTED": return "Rejected by Advisor";
+      case "DROPPED_BY_STUDENT": return "Dropped";
+      default: return "";
     }
   };
 
   // Status badge color
   const statusColor = (status) => {
     switch (status) {
-      case "ENROLLED":
-        return "bg-green-100 text-green-700";
+      case "ENROLLED": return "bg-green-100 text-green-700";
       case "PENDING_INSTRUCTOR_APPROVAL":
-      case "PENDING_ADVISOR_APPROVAL":
-        return "bg-yellow-100 text-yellow-700";
+      case "PENDING_ADVISOR_APPROVAL": return "bg-yellow-100 text-yellow-700";
       case "INSTRUCTOR_REJECTED":
-      case "ADVISOR_REJECTED":
-        return "bg-red-100 text-red-700";
-      default:
-        return "";
+      case "ADVISOR_REJECTED": return "bg-red-100 text-red-700";
+      default: return "bg-gray-100 text-gray-700";
     }
+  };
+
+  // Helper for List Item Status Color
+  const getListStatusColor = (status) => {
+    if (status === 'ENROLLED') return 'text-green-600 bg-green-50 border-green-200';
+    if (status.includes('PENDING')) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+    return 'text-gray-600 bg-gray-50';
+  };
+
+  // Logic helper
+  const getCourseActions = (course) => {
+    const enrollment = appliedMap[course.course_id];
+    const status = enrollment?.status;
+    const canApply = !enrollment || status === "DROPPED_BY_STUDENT";
+    const canDrop = enrollment && 
+                    status !== "DROPPED_BY_STUDENT" && 
+                    status !== "INSTRUCTOR_REJECTED" && 
+                    status !== "ADVISOR_REJECTED" &&
+                    enrollment.grade === null;
+    return { enrollment, status, canApply, canDrop };
   };
 
   return (
     <>
       <h2 className="text-2xl font-bold mb-4">Available Courses</h2>
 
-      {/* 🔍 SEARCH BAR SECTION */}
+      {/* SEARCH BAR */}
       <div className="bg-white p-4 rounded-lg shadow border mb-6 grid grid-cols-2 md:grid-cols-5 gap-3">
         <input name="code" placeholder="Course Code" className="border p-2 rounded text-sm" value={search.code} onChange={handleChange} />
         <input name="title" placeholder="Course Title" className="border p-2 rounded text-sm" value={search.title} onChange={handleChange} />
@@ -129,28 +179,20 @@ export default function Courses() {
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {courses.map((c) => {
-            const enrollment = appliedMap[c.course_id];
-            const status = enrollment?.status;
-
-            // Logic: Show Apply if never enrolled OR if they dropped
-            const canApply = !enrollment || status === "DROPPED_BY_STUDENT";
-
-            // Logic: Show Drop if applied and not rejected and not already dropped
-            const canDrop = enrollment && 
-                            status !== "DROPPED_BY_STUDENT" && 
-                            status !== "INSTRUCTOR_REJECTED" && 
-                            status !== "ADVISOR_REJECTED" &&
-                            enrollment.grade === null;
+            const { canApply, canDrop, enrollment, status } = getCourseActions(c);
 
             return (
-              <div key={c.course_id} className="bg-white p-4 shadow rounded border">
+              <div 
+                key={c.course_id} 
+                onClick={() => setSelectedCourse(c)}
+                className="bg-white p-4 shadow rounded border hover:shadow-lg transition cursor-pointer relative"
+              >
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h3 className="font-bold text-lg">{c.title}</h3>
+                    <h3 className="font-bold text-lg text-blue-900">{c.title}</h3>
                     <p className="text-sm text-gray-500">{c.course_code}</p>
                     <p className="text-sm text-gray-700">Instructor: {c.instructor?.full_name || "—"}</p>
                   </div>
-                  {/* 🚀 Status Reflected Here */}
                   {enrollment && (
                     <span className={`px-2 py-1 text-xs font-bold rounded ${statusColor(status)}`}>
                       {statusText(status)}
@@ -158,16 +200,23 @@ export default function Courses() {
                   )}
                 </div>
 
-                <div className="flex gap-2 mt-4">
+                <div className="flex gap-2 mt-4 items-center">
+                  <button
+                    onClick={(e) => handleShowEnrollments(e, c)}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition border border-gray-300"
+                  >
+                    Show Enrollments
+                  </button>
+
                   {canApply && (
-                    <button onClick={() => apply(c.course_id)}
+                    <button onClick={(e) => { e.stopPropagation(); apply(c.course_id); }}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm transition">
                       Apply
                     </button>
                   )}
 
                   {canDrop && (
-                    <button onClick={() => drop(enrollment.enrollment_id)}
+                    <button onClick={(e) => { e.stopPropagation(); drop(enrollment.enrollment_id); }}
                       className="border border-red-600 text-red-600 hover:bg-red-50 px-4 py-1 rounded text-sm transition">
                       Drop Course
                     </button>
@@ -176,6 +225,140 @@ export default function Courses() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 1. COURSE DETAILS MODAL */}
+      {selectedCourse && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative">
+            <button 
+              onClick={() => setSelectedCourse(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-black text-xl font-bold"
+            >
+              &times;
+            </button>
+
+            <h2 className="text-2xl font-bold mb-1">{selectedCourse.title}</h2>
+            <p className="text-gray-500 mb-4">{selectedCourse.course_code}</p>
+
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-gray-700">Department:</span>
+                <span>{selectedCourse.department}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-gray-700">Instructor:</span>
+                <span>{selectedCourse.instructor?.full_name || "N/A"}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-gray-700">Session:</span>
+                <span>{selectedCourse.acad_session}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-gray-700">Seats:</span>
+                <span>{selectedCourse.enrolled_count} / {selectedCourse.capacity}</span>
+              </div>
+              
+              <div className="mt-4 p-3 bg-gray-50 rounded border">
+                <h4 className="font-bold text-gray-800 mb-2">My Enrollment Status</h4>
+                {appliedMap[selectedCourse.course_id] ? (
+                   <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 text-sm font-bold rounded ${statusColor(appliedMap[selectedCourse.course_id].status)}`}>
+                        {statusText(appliedMap[selectedCourse.course_id].status)}
+                      </span>
+                   </div>
+                ) : (
+                  <span className="text-gray-500 text-sm">You are not enrolled in this course.</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-4">
+              {(() => {
+                const { canApply, canDrop, enrollment } = getCourseActions(selectedCourse);
+                return (
+                  <>
+                    {canApply && (
+                      <button 
+                        onClick={() => apply(selectedCourse.course_id)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded transition font-semibold"
+                      >
+                        Apply Now
+                      </button>
+                    )}
+                    {canDrop && (
+                      <button 
+                        onClick={() => drop(enrollment.enrollment_id)}
+                        className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 px-6 py-2 rounded transition font-semibold"
+                      >
+                        Drop Course
+                      </button>
+                    )}
+                    {!canApply && !canDrop && (
+                        <button 
+                            onClick={() => setSelectedCourse(null)}
+                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded transition"
+                        >
+                            Close
+                        </button>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. ENROLLMENT LIST MODAL */}
+      {showEnrollmentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 relative max-h-[80vh] flex flex-col">
+            <button 
+              onClick={() => setShowEnrollmentModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-black text-xl font-bold"
+            >
+              &times;
+            </button>
+
+            <h3 className="text-xl font-bold mb-1">Current Enrollments</h3>
+            <p className="text-sm text-gray-500">{viewingEnrollmentMeta.title}</p>
+            
+            {/* 🚀 CORRECTED DISPLAY: Enrolled / Capacity */}
+            <p className="text-sm font-semibold text-blue-600 mt-1 mb-4">
+              Current Enrolled: {viewingEnrollmentMeta.enrolledCount}/{viewingEnrollmentMeta.capacity}
+            </p>
+
+            <div className="overflow-y-auto flex-1">
+              {enrollmentList.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No students have applied yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {enrollmentList.map((record, idx) => (
+                    <li key={idx} className="flex justify-between items-center p-3 border rounded bg-gray-50">
+                      <div>
+                        <p className="font-semibold text-gray-800">{record.student?.full_name || "Unknown"}</p>
+                        <p className="text-xs text-gray-500">{record.student?.department || "No Dept"}</p>
+                      </div>
+                      <span className={`text-[10px] px-2 py-1 rounded border font-bold uppercase ${getListStatusColor(record.status)}`}>
+                        {record.status.replace(/_/g, ' ')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            
+            <div className="mt-4 text-right">
+              <button 
+                onClick={() => setShowEnrollmentModal(false)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
