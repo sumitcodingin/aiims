@@ -15,7 +15,8 @@ const getInstructorCourses = async (req, res) => {
         course_code,
         title,
         acad_session,
-        status
+        status,
+        credits  // 🚀 Added credits to selection (optional, but good for display)
       `)
       .eq("faculty_id", instructor_id);
 
@@ -159,6 +160,7 @@ const floatCourse = async (req, res) => {
     title,
     department,
     acad_session,
+    credits,  // 🚀 Get credits from request
     capacity,
     advisor_id,
     instructor_id,
@@ -171,6 +173,7 @@ const floatCourse = async (req, res) => {
         title,
         department,
         acad_session,
+        credits, // 🚀 Save to database column
         capacity,
         faculty_id: instructor_id,
         advisor_id,
