@@ -42,11 +42,12 @@ exports.requestOTP = async (req, res) => {
   }
 };
 
-// STEP 2: VERIFY OTP (LOGIN)
+// STEP 2: VERIFY OTP (LOGIN) - [UPDATED FOR ADMIN APPROVAL]
 exports.verifyOTP = async (req, res) => {
   const { email, otp } = req.body;
 
   try {
+    // 1. Verify OTP match
     const { data: record } = await supabase
       .from('otp_store')
       .select('*')
@@ -58,6 +59,7 @@ exports.verifyOTP = async (req, res) => {
       return res.status(401).json({ error: "Invalid OTP." });
     }
 
+    // 2. Get User
     const { data: user } = await supabase
       .from('users')
       .select('*')
@@ -68,6 +70,15 @@ exports.verifyOTP = async (req, res) => {
       return res.status(404).json({ error: "User not found." });
     }
 
+    // 🚀 NEW: CHECK STATUS (Admin Approval Logic)
+    if (user.account_status === 'PENDING') {
+      return res.status(403).json({ error: "Account awaiting admin approval." });
+    }
+    if (user.account_status === 'BLOCKED') {
+      return res.status(403).json({ error: "Account has been blocked by Admin." });
+    }
+
+    // 3. Cleanup & Response
     await supabase.from('otp_store').delete().eq('email', email);
 
     res.json({
@@ -75,7 +86,8 @@ exports.verifyOTP = async (req, res) => {
       user: {
         id: user.user_id,
         name: user.full_name,
-        role: user.role
+        role: user.role,
+        department: user.department
       }
     });
   } catch (err) {
@@ -140,16 +152,13 @@ exports.requestSignupOTP = async (req, res) => {
   }
 };
 
-// STEP 2: VERIFY OTP & CREATE USER
+// STEP 2: VERIFY OTP & CREATE USER - [UPDATED FOR PENDING STATUS]
 exports.verifySignupOTP = async (req, res) => {
   const { email, otp, full_name, role, department, batch, entry_no } = req.body;
 
   try {
-    // Validate email domain (defense in depth)
     if (!email || !email.endsWith("@iitrpr.ac.in")) {
-      return res.status(400).json({ 
-        error: "Email must be from IIT Ropar domain (@iitrpr.ac.in)" 
-      });
+      return res.status(400).json({ error: "Email must be from IIT Ropar domain." });
     }
 
     const { data: record } = await supabase
@@ -159,30 +168,22 @@ exports.verifySignupOTP = async (req, res) => {
       .eq('otp_code', otp)
       .single();
 
-    if (!record) {
-      return res.status(401).json({ error: "Invalid OTP." });
-    }
+    if (!record) return res.status(401).json({ error: "Invalid OTP." });
 
     let advisorId = null;
-
-    // ✅ AUTO-ASSIGN ADVISOR FOR STUDENT
+    // Auto-assign advisor for Students (Optional logic)
     if (role === "Student") {
-      const { data: advisor, error } = await supabase
+      const { data: advisor } = await supabase
         .from('users')
         .select('user_id')
         .eq('role', 'Advisor')
         .eq('department', department)
         .single();
-
-      if (error || !advisor) {
-        return res.status(400).json({
-          error: `No advisor found for department ${department}`
-        });
-      }
-
-      advisorId = advisor.user_id;
+        
+      if (advisor) advisorId = advisor.user_id;
     }
 
+    // 🚀 INSERT USER WITH 'PENDING' STATUS
     const { data: user, error: insertError } = await supabase
       .from('users')
       .insert([
@@ -191,44 +192,28 @@ exports.verifySignupOTP = async (req, res) => {
           full_name,
           role,
           department,
-          advisor_id: advisorId
+          advisor_id: advisorId,
+          account_status: 'PENDING' // <--- Set as Pending initially
         }
       ])
       .select()
       .single();
 
-    if (insertError) {
-      console.error(insertError);
-      return res.status(500).json({ error: "User creation failed." });
-    }
+    if (insertError) throw insertError;
 
-    // CREATE STUDENT PROFILE
     if (role === "Student") {
-      const { error: profileError } = await supabase
-        .from('student_profile')
-        .insert([
-          {
-            student_id: user.user_id, // Link to the newly created user
-            batch: batch,
-            entry_no: entry_no
-          }
-        ]);
-
-      if (profileError) {
-        console.error("Student profile creation failed:", profileError);
-        // Optional: You could delete the user record here if profile creation fails
-      }
+      await supabase.from('student_profile').insert([{
+        student_id: user.user_id,
+        batch,
+        entry_no
+      }]);
     }
 
     await supabase.from('otp_store').delete().eq('email', email);
 
     res.json({
-      message: "Signup successful",
-      user: {
-        id: user.user_id,
-        name: user.full_name,
-        role: user.role
-      }
+      message: "Signup successful! Please wait for Admin approval.",
+      user: null 
     });
   } catch (err) {
     console.error(err);

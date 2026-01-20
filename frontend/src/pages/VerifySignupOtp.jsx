@@ -6,18 +6,21 @@ export default function VerifySignupOtp() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const signupData = location.state; // email, name, role, etc.
+  // Retrieve data passed from Signup page
+  const signupData = location.state; // email, full_name, role, etc.
+  
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(30);
 
+  // Timer Logic
   useEffect(() => {
     let interval;
     if (timer > 0) interval = setInterval(() => setTimer(prev => prev - 1), 1000);
     return () => clearInterval(interval);
   }, [timer]);
 
-  // If page refreshed and state is lost
+  // If page refreshed and state is lost (Session Check)
   if (!signupData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -37,7 +40,7 @@ export default function VerifySignupOtp() {
   }
 
   // ============================
-  // VERIFY SIGNUP OTP
+  // VERIFY SIGNUP OTP (UPDATED)
   // ============================
   const verify = async () => {
     if (!otp) {
@@ -53,12 +56,15 @@ export default function VerifySignupOtp() {
         otp
       });
 
-      // Save logged-in user (IMPORTANT for ProtectedRoute)
-      sessionStorage.setItem("user", JSON.stringify(res.data.user));
+      // 🛑 CHANGED HERE: Do NOT log them in automatically.
+      // Instead, show the success message from backend.
+      alert(res.data.message || "Signup successful! Please wait for Admin approval.");
 
-      // Redirect to dashboard
-      navigate("/dashboard", { replace: true });
+      // Redirect to Login page so they can wait for approval
+      navigate("/login", { replace: true });
+
     } catch (err) {
+      console.error(err);
       alert(
         err.response?.data?.error ||
           "OTP verification failed. Please try again."
@@ -82,18 +88,22 @@ export default function VerifySignupOtp() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-6 rounded shadow w-80">
         <h2 className="font-bold mb-4 text-center">Verify Signup OTP</h2>
+        <p className="text-xs text-gray-500 text-center mb-4">
+          Code sent to: {signupData.email}
+        </p>
 
         <input
-          className="w-full border p-2 mb-3 text-center tracking-widest"
+          className="w-full border p-2 mb-3 text-center tracking-widest text-lg"
           placeholder="Enter OTP"
           value={otp}
           onChange={(e) => setOtp(e.target.value)}
+          maxLength={6}
         />
 
         <button
           onClick={verify}
           disabled={loading}
-          className={`w-full text-white py-2 rounded ${
+          className={`w-full text-white py-2 rounded transition ${
             loading
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-green-600 hover:bg-green-700"
@@ -115,10 +125,10 @@ export default function VerifySignupOtp() {
           </div>
 
           <button
-            onClick={() => navigate("/", { replace: true })}
+            onClick={() => navigate("/signup", { replace: true })}
             className="w-full text-gray-600 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition"
           >
-            Change Email
+            Back to Signup
           </button>
         </div>
       </div>
