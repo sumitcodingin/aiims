@@ -20,11 +20,8 @@ export default function AdvisorDashboard() {
     window.location.href = "/";
   };
 
-  /* ===================================================
-     STUDENT APPROVAL FLOW
-  =================================================== */
+  /* ================= STUDENT APPROVAL FLOW ================= */
 
-  // 1️⃣ Fetch courses that have students pending advisor approval
   useEffect(() => {
     if (activeTab !== "students") return;
 
@@ -36,7 +33,6 @@ export default function AdvisorDashboard() {
       .catch(() => setCourses([]));
   }, [activeTab, user.id]);
 
-  // 2️⃣ Fetch students for selected course
   useEffect(() => {
     if (!selectedCourse) return;
 
@@ -51,7 +47,6 @@ export default function AdvisorDashboard() {
       .catch(() => setStudents([]));
   }, [selectedCourse, user.id]);
 
-  // 3️⃣ Approve / Reject student
   const handleStudentAction = async (enrollmentId, action) => {
     await api.post("/advisor/approve-request", {
       enrollmentId,
@@ -64,9 +59,7 @@ export default function AdvisorDashboard() {
     );
   };
 
-  /* ===================================================
-     COURSE APPROVAL FLOW
-  =================================================== */
+  /* ================= COURSE APPROVAL FLOW ================= */
 
   const fetchPendingCourses = async () => {
     setLoading(true);
@@ -100,38 +93,59 @@ export default function AdvisorDashboard() {
     );
   };
 
-  /* ===================================================
-     UI
-  =================================================== */
+  /* ================= UI ================= */
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* NAVBAR */}
-      <nav className="bg-blue-600 text-white px-6 py-4 flex justify-between">
-        <h1 className="text-xl font-bold">🎓 Advisor Dashboard</h1>
+      {/* ================= LEFT FIXED SIDEBAR ================= */}
+      <nav className="fixed top-0 left-0 h-screen w-64 bg-blue-600 text-white shadow flex flex-col justify-between">
+        {/* TOP */}
+        <div>
+          <h1 className="text-2xl font-bold px-6 py-5 border-b border-blue-500">
+            Advisor Portal
+          </h1>
 
-        <div className="flex gap-6 items-center">
-          <NavBtn active={activeTab === "students"} onClick={() => setActiveTab("students")}>
-            Student Approvals
-          </NavBtn>
+          <div className="flex flex-col mt-4">
+            <NavBtn
+              active={activeTab === "students"}
+              onClick={() => setActiveTab("students")}
+            >
+              Student Approvals
+            </NavBtn>
 
-          <NavBtn active={activeTab === "courses"} onClick={() => setActiveTab("courses")}>
-            Course Approvals
-          </NavBtn>
+            <NavBtn
+              active={activeTab === "courses"}
+              onClick={() => setActiveTab("courses")}
+            >
+              Course Approvals
+            </NavBtn>
 
-          <NavBtn active={activeTab === "profile"} onClick={() => setActiveTab("profile")}>
-            Profile
-          </NavBtn>
+            <NavBtn
+              active={activeTab === "profile"}
+              onClick={() => setActiveTab("profile")}
+            >
+              Profile
+            </NavBtn>
+          </div>
+        </div>
 
-          <span>{user?.name}</span>
-          <button onClick={logout} className="bg-red-500 px-3 py-1 rounded">
+        {/* BOTTOM */}
+        <div className="px-6 py-4 border-t border-blue-500">
+          <p className="text-sm opacity-90 mb-3">
+            {user?.name || "Advisor"}
+          </p>
+
+          <button
+            onClick={logout}
+            className="w-full bg-red-500 hover:bg-red-600 px-3 py-2 rounded text-sm"
+          >
             Logout
           </button>
         </div>
       </nav>
 
-      {/* CONTENT */}
-      <div className="p-6">
+      {/* ================= MAIN CONTENT ================= */}
+      <main className="ml-64 p-6 min-h-screen overflow-y-auto">
         {/* ================= STUDENT APPROVALS ================= */}
         {activeTab === "students" && (
           <div className="max-w-4xl">
@@ -139,7 +153,6 @@ export default function AdvisorDashboard() {
               Student Enrollment Approvals
             </h2>
 
-            {/* Course Select */}
             <select
               className="border px-3 py-2 rounded w-full mb-4"
               value={selectedCourse}
@@ -170,13 +183,17 @@ export default function AdvisorDashboard() {
 
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleStudentAction(s.enrollment_id, "ACCEPT")}
+                      onClick={() =>
+                        handleStudentAction(s.enrollment_id, "ACCEPT")
+                      }
                       className="bg-green-600 text-white px-3 py-1 rounded"
                     >
                       Accept
                     </button>
                     <button
-                      onClick={() => handleStudentAction(s.enrollment_id, "REJECT")}
+                      onClick={() =>
+                        handleStudentAction(s.enrollment_id, "REJECT")
+                      }
                       className="bg-red-600 text-white px-3 py-1 rounded"
                     >
                       Reject
@@ -217,13 +234,17 @@ export default function AdvisorDashboard() {
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleCourseAction(c.course_id, "APPROVE")}
+                    onClick={() =>
+                      handleCourseAction(c.course_id, "APPROVE")
+                    }
                     className="bg-green-600 text-white px-3 py-1 rounded"
                   >
                     Approve
                   </button>
                   <button
-                    onClick={() => handleCourseAction(c.course_id, "REJECT")}
+                    onClick={() =>
+                      handleCourseAction(c.course_id, "REJECT")
+                    }
                     className="bg-red-600 text-white px-3 py-1 rounded"
                   >
                     Reject
@@ -242,16 +263,23 @@ export default function AdvisorDashboard() {
             <ProfileItem label="User ID" value={user?.id} />
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
 
-/* ------------------ Helpers ------------------ */
+/* ================= HELPERS ================= */
 
 function NavBtn({ active, children, ...props }) {
   return (
-    <button {...props} className={`font-medium ${active ? "underline" : ""}`}>
+    <button
+      {...props}
+      className={`text-left px-6 py-3 transition ${
+        active
+          ? "bg-blue-500 font-medium"
+          : "opacity-90 hover:bg-blue-500 hover:opacity-100"
+      }`}
+    >
       {children}
     </button>
   );

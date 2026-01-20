@@ -60,9 +60,9 @@ export default function AdminDashboard() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">👑 Admin Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
         <button onClick={handleReset} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow">
-          ⚠ Reset Enrollments
+          Reset Enrollments
         </button>
       </div>
 

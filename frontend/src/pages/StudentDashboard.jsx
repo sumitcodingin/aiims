@@ -14,48 +14,54 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* 🔵 BLUE NAVBAR */}
-      <nav className="bg-blue-600 text-white shadow px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">
-          🎓 Student Dashboard
-        </h1>
+      {/* ================= LEFT FIXED SIDEBAR ================= */}
+      <nav className="fixed top-0 left-0 h-screen w-64 bg-blue-600 text-white shadow flex flex-col justify-between">
+        {/* TOP */}
+        <div>
+          <h1 className="text-2xl font-bold px-6 py-5 border-b border-blue-500">
+            Student Portal
+          </h1>
 
-        <div className="flex gap-6 items-center">
-          <NavButton
-            label="Courses"
-            active={activeTab === "courses"}
-            onClick={() => setActiveTab("courses")}
-          />
-          <NavButton
-            label="Profile"
-            active={activeTab === "profile"}
-            onClick={() => setActiveTab("profile")}
-          />
-          <NavButton
-            label="Records"
-            active={activeTab === "records"}
-            onClick={() => setActiveTab("records")}
-          />
+          <div className="flex flex-col mt-4">
+            <NavButton
+              label="Courses"
+              active={activeTab === "courses"}
+              onClick={() => setActiveTab("courses")}
+            />
+            <NavButton
+              label="Profile"
+              active={activeTab === "profile"}
+              onClick={() => setActiveTab("profile")}
+            />
+            <NavButton
+              label="Records"
+              active={activeTab === "records"}
+              onClick={() => setActiveTab("records")}
+            />
+          </div>
+        </div>
 
-          <span className="opacity-90">
+        {/* BOTTOM */}
+        <div className="px-6 py-4 border-t border-blue-500">
+          <p className="text-sm opacity-90 mb-3">
             {user?.name || "Student"}
-          </span>
+          </p>
 
           <button
             onClick={logout}
-            className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded"
+            className="w-full bg-red-500 hover:bg-red-600 px-3 py-2 rounded text-sm"
           >
             Logout
           </button>
         </div>
       </nav>
 
-      {/* CONTENT */}
-      <div className="p-6">
+      {/* ================= MAIN CONTENT ================= */}
+      <main className="ml-64 p-6 min-h-screen overflow-y-auto">
         {activeTab === "courses" && <Courses />}
         {activeTab === "profile" && <StudentProfile />}
         {activeTab === "records" && <StudentRecords />}
-      </div>
+      </main>
     </div>
   );
 }
@@ -67,10 +73,10 @@ function NavButton({ label, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`font-medium transition ${
+      className={`text-left px-6 py-3 transition ${
         active
-          ? "underline underline-offset-4"
-          : "opacity-90 hover:opacity-100"
+          ? "bg-blue-500 font-medium"
+          : "opacity-90 hover:bg-blue-500 hover:opacity-100"
       }`}
     >
       {label}
