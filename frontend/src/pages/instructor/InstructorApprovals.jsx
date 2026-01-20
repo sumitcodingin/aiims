@@ -21,7 +21,7 @@ export default function InstructorApprovals() {
       .catch(() => setCourses([]));
   }, [user.id]);
 
-  /* ================= FETCH APPLICATIONS ================= */
+  /* ================= FETCH APPLICATIONS & ENROLLED ================= */
   useEffect(() => {
     if (!selectedCourse) return;
 
@@ -35,24 +35,38 @@ export default function InstructorApprovals() {
       .finally(() => setLoading(false));
   }, [selectedCourse]);
 
-  /* ================= APPROVE / REJECT ================= */
+  /* ================= ACTIONS: APPROVE / REJECT / REMOVE ================= */
   const handleAction = async (enrollmentId, action) => {
+    // Confirmation for Removal
+    if (action === "REMOVE" && !window.confirm("Are you sure you want to remove this student?")) {
+      return;
+    }
+
     try {
       await api.post("/instructor/approve-request", {
         enrollmentId,
-        action,
+        action, // 'ACCEPT', 'REJECT', or 'REMOVE'
         instructor_id: user.id,
       });
 
+      // Remove the processed student from the local list
       setApplications((prev) =>
         prev.filter((a) => a.enrollment_id !== enrollmentId)
       );
     } catch {
-      alert("Failed to update enrollment status");
+      alert("Failed to update student status.");
     }
   };
 
-  /* ================= FILTER ================= */
+  /* ================= SEPARATE LISTS ================= */
+  const pendingStudents = applications.filter(
+    (a) => a.status === "PENDING_INSTRUCTOR_APPROVAL"
+  );
+  const enrolledStudents = applications.filter(
+    (a) => a.status === "ENROLLED"
+  );
+
+  /* ================= FILTER COURSES ================= */
   const filteredCourses = courses.filter(
     (c) =>
       c.course_code.toLowerCase().includes(search.toLowerCase()) ||
@@ -93,7 +107,7 @@ export default function InstructorApprovals() {
         </>
       )}
 
-      {/* ================= ENROLLMENTS VIEW ================= */}
+      {/* ================= COURSE DETAILS VIEW ================= */}
       {selectedCourse && (
         <>
           <button
@@ -110,57 +124,56 @@ export default function InstructorApprovals() {
             <h3 className="text-xl font-bold">
               {selectedCourse.course_code} — {selectedCourse.title}
             </h3>
-            <p className="text-gray-600 text-sm mt-1">
-              {selectedCourse.department} • {selectedCourse.acad_session}
-            </p>
+            <div className="text-sm text-gray-700 mt-2 space-y-1">
+              <p><span className="font-semibold">Department:</span> {selectedCourse.department}</p>
+              <p><span className="font-semibold">Session:</span> {selectedCourse.acad_session}</p>
+              <p><span className="font-semibold">Seats:</span> {selectedCourse.enrolled_count || 0} / {selectedCourse.capacity}</p>
+            </div>
           </div>
 
           {loading ? (
-            <p className="text-gray-600">Loading applications...</p>
-          ) : applications.length === 0 ? (
-            <p className="text-gray-600">
-              No pending student applications.
-            </p>
+            <p className="text-gray-600">Loading students...</p>
           ) : (
-            <div className="space-y-4">
-              {applications.map((a) => (
-                <div
-                  key={a.enrollment_id}
-                  className="bg-white shadow rounded-lg p-4 flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-semibold">
-                      {a.student?.full_name}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {a.student?.email}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Status: {a.status}
-                    </p>
+            <div className="space-y-8">
+              
+              {/* === SECTION 1: PENDING APPLICATIONS === */}
+              <div>
+                <h4 className="text-lg font-bold mb-3 text-yellow-700 border-b pb-2">Pending Applications</h4>
+                {pendingStudents.length === 0 ? (
+                  <p className="text-gray-500 italic">No pending applications.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingStudents.map((a) => (
+                      <StudentRow 
+                        key={a.enrollment_id} 
+                        application={a} 
+                        onAccept={() => handleAction(a.enrollment_id, "ACCEPT")}
+                        onReject={() => handleAction(a.enrollment_id, "REJECT")}
+                      />
+                    ))}
                   </div>
+                )}
+              </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() =>
-                        handleAction(a.enrollment_id, "ACCEPT")
-                      }
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded"
-                    >
-                      Accept
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        handleAction(a.enrollment_id, "REJECT")
-                      }
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded"
-                    >
-                      Reject
-                    </button>
+              {/* === SECTION 2: ENROLLED STUDENTS === */}
+              <div>
+                <h4 className="text-lg font-bold mb-3 text-green-700 border-b pb-2">Enrolled Students</h4>
+                {enrolledStudents.length === 0 ? (
+                  <p className="text-gray-500 italic">No enrolled students yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {enrolledStudents.map((a) => (
+                      <StudentRow 
+                        key={a.enrollment_id} 
+                        application={a}
+                        isEnrolled={true}
+                        onRemove={() => handleAction(a.enrollment_id, "REMOVE")}
+                      />
+                    ))}
                   </div>
-                </div>
-              ))}
+                )}
+              </div>
+
             </div>
           )}
         </>
@@ -169,31 +182,67 @@ export default function InstructorApprovals() {
   );
 }
 
-/* ================= COURSE CARD ================= */
+/* ================= HELPER COMPONENTS ================= */
+
+function StudentRow({ application, onAccept, onReject, onRemove, isEnrolled }) {
+  return (
+    <div className="bg-white shadow rounded-lg p-4 flex justify-between items-center border-l-4 border-gray-200">
+      <div>
+        <p className="font-semibold text-gray-900">{application.student?.full_name}</p>
+        <p className="text-sm text-gray-600">{application.student?.email}</p>
+        <p className="text-xs text-gray-500 uppercase font-bold mt-1">
+          {application.student?.department}
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        {isEnrolled ? (
+          <button
+            onClick={onRemove}
+            className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 px-4 py-1.5 rounded text-sm font-semibold transition"
+          >
+            Remove Student
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={onAccept}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-sm font-semibold transition"
+            >
+              Accept
+            </button>
+            <button
+              onClick={onReject}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded text-sm font-semibold transition"
+            >
+              Reject
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function CourseCard({ course, onView }) {
   return (
     <div className="bg-white shadow rounded-xl p-6 flex flex-col justify-between">
       <div>
-        <h3 className="text-lg font-bold mb-1">
-          {course.course_code}
-        </h3>
-        <p className="text-gray-700 font-medium">
-          {course.title}
-        </p>
+        <h3 className="text-lg font-bold mb-1">{course.course_code}</h3>
+        <p className="text-gray-700 font-medium">{course.title}</p>
 
-        <div className="text-sm text-gray-600 mt-2 space-y-1">
-          <p>Department: {course.department}</p>
-          <p>Session: {course.acad_session}</p>
-          <p>Capacity: {course.capacity}</p>
+        <div className="text-sm text-gray-600 mt-3 space-y-1">
+          <p><span className="font-semibold text-gray-800">Department:</span> {course.department}</p>
+          <p><span className="font-semibold text-gray-800">Session:</span> {course.acad_session}</p>
+          <p><span className="font-semibold text-gray-800">Seats:</span> {course.enrolled_count || 0} / {course.capacity}</p>
         </div>
       </div>
 
       <button
         onClick={onView}
-        className="mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
+        className="mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition"
       >
-        View Enrollments
+        View Details
       </button>
     </div>
   );

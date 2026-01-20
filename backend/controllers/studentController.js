@@ -1,4 +1,5 @@
 const supabase = require('../supabaseClient');
+const { sendStatusEmail } = require('../utils/sendEmail');
 
 // ===================================
 // Apply for a course
@@ -7,31 +8,49 @@ exports.applyForCourse = async (req, res) => {
   const { student_id, course_id } = req.body;
 
   try {
-    // 1. Check if an enrollment already exists for this student and course
+    // 0. Fetch Student & Course Details for Email Notifications
+    const { data: student } = await supabase
+      .from('users')
+      .select('full_name, email')
+      .eq('user_id', student_id)
+      .single();
+
+    const { data: course } = await supabase
+      .from('courses')
+      .select('title, course_code')
+      .eq('course_id', course_id)
+      .single();
+
+    // 1. Check if an enrollment already exists
     const { data: existing, error: fetchError } = await supabase
       .from('enrollments')
       .select('enrollment_id, status')
       .eq('student_id', student_id)
       .eq('course_id', course_id)
-      .maybeSingle(); // Use maybeSingle to avoid errors if no record is found
+      .maybeSingle(); 
 
     if (fetchError) throw fetchError;
 
     if (existing) {
-      // 2. If it exists and was dropped, "re-activate" it
-      if (existing.status === 'DROPPED_BY_STUDENT' || existing.status === 'INSTRUCTOR_REJECTED' || existing.status === 'ADVISOR_REJECTED') {
+      // 2. If it exists and was dropped/rejected, "re-activate" it
+      if (['DROPPED_BY_STUDENT', 'INSTRUCTOR_REJECTED', 'ADVISOR_REJECTED'].includes(existing.status)) {
         const { error: updateError } = await supabase
           .from('enrollments')
           .update({ 
             status: 'PENDING_INSTRUCTOR_APPROVAL',
-            grade: null // Reset grade if they re-apply
+            grade: null 
           })
           .eq('enrollment_id', existing.enrollment_id);
 
         if (updateError) throw updateError;
+
+        // EMAIL NOTIFICATION
+        if (student && course) {
+          await sendStatusEmail(student.email, student.full_name, course.title, 'PENDING_INSTRUCTOR_APPROVAL');
+        }
+
         return res.json({ message: 'Re-application submitted successfully.' });
       } else {
-        // If they are already enrolled or pending, block the request
         return res.status(400).json({ 
           error: 'Invalid Action', 
           message: 'You already have an active application or enrollment for this course.' 
@@ -49,6 +68,11 @@ exports.applyForCourse = async (req, res) => {
     ]);
 
     if (insertError) throw insertError;
+
+    // EMAIL NOTIFICATION
+    if (student && course) {
+      await sendStatusEmail(student.email, student.full_name, course.title, 'PENDING_INSTRUCTOR_APPROVAL');
+    }
 
     res.status(201).json({
       message: 'Enrollment request submitted. Awaiting instructor approval.',
@@ -68,7 +92,11 @@ exports.dropCourse = async (req, res) => {
   try {
     const { data: enrollment, error } = await supabase
       .from('enrollments')
-      .select('grade')
+      .select(`
+        grade,
+        course:courses(title),
+        student:users(email, full_name)
+      `)
       .eq('enrollment_id', enrollmentId)
       .single();
 
@@ -86,6 +114,16 @@ exports.dropCourse = async (req, res) => {
       .from('enrollments')
       .update({ status: 'DROPPED_BY_STUDENT' })
       .eq('enrollment_id', enrollmentId);
+
+    // EMAIL NOTIFICATION (Optional for Drop)
+    if (enrollment.student && enrollment.course) {
+      await sendStatusEmail(
+        enrollment.student.email, 
+        enrollment.student.full_name, 
+        enrollment.course.title, 
+        'DROPPED_BY_STUDENT'
+      );
+    }
 
     res.json({ message: 'Course dropped successfully.' });
   } catch (err) {
@@ -127,11 +165,11 @@ exports.getStudentRecords = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch student records.' });
   }
 };
+
 exports.getStudentProfile = async (req, res) => {
   const { student_id } = req.query;
 
   try {
-    // Fetch student
     const { data: student, error } = await supabase
       .from('users')
       .select(`
@@ -150,7 +188,6 @@ exports.getStudentProfile = async (req, res) => {
       return res.status(404).json({ error: 'Student not found.' });
     }
 
-    // SEPARATE fetch for the 'student_profile' table
     const { data: profileData } = await supabase
       .from('student_profile')
       .select('batch, entry_no')
@@ -158,19 +195,15 @@ exports.getStudentProfile = async (req, res) => {
       .single();
 
     let advisor = null;
-
-    // Fetch advisor separately (if exists)
     if (student.advisor_id) {
       const { data: advisorData } = await supabase
         .from('users')
         .select('user_id, full_name, email')
         .eq('user_id', student.advisor_id)
         .single();
-
       advisor = advisorData || null;
     }
 
-    // Merge response
     res.json({
       ...student,
       student_profile: profileData || null,
@@ -183,22 +216,16 @@ exports.getStudentProfile = async (req, res) => {
 };
 
 // ===================================
-// Course Instructor Feedback (Student)
+// Course Instructor Feedback
 // ===================================
-
-// 1) List eligible course-instructor pairs (ENROLLED only)
 exports.getFeedbackOptions = async (req, res) => {
   const { student_id } = req.query;
-
-  if (!student_id) {
-    return res.status(400).json({ error: "student_id is required." });
-  }
+  if (!student_id) return res.status(400).json({ error: "student_id is required." });
 
   try {
     const { data, error } = await supabase
       .from("enrollments")
-      .select(
-        `
+      .select(`
           course_id,
           courses:courses (
             course_id,
@@ -211,16 +238,13 @@ exports.getFeedbackOptions = async (req, res) => {
               full_name
             )
           )
-        `
-      )
+        `)
       .eq("student_id", student_id)
       .eq("status", "ENROLLED");
 
     if (error) throw error;
 
-    const options =
-      (data || [])
-        .map((row) => {
+    const options = (data || []).map((row) => {
           const c = row.courses;
           if (!c) return null;
           return {
@@ -231,8 +255,7 @@ exports.getFeedbackOptions = async (req, res) => {
             instructor_id: c.faculty_id,
             instructor_name: c.instructor?.full_name || "—",
           };
-        })
-        .filter(Boolean) || [];
+        }).filter(Boolean);
 
     res.json(options);
   } catch (err) {
@@ -241,56 +264,14 @@ exports.getFeedbackOptions = async (req, res) => {
   }
 };
 
-// 2) Submit feedback (anonymous to instructor; stored with student_id for one-time enforcement)
 exports.submitInstructorFeedback = async (req, res) => {
-  const {
-    student_id,
-    course_id,
-    instructor_id,
-    feedback_type,
-    q1,
-    q2,
-    q3,
-    q4,
-    q5,
-    q6,
-    q7,
-    q8,
-    q9,
-    q10,
-    q11,
-  } = req.body;
+  const { student_id, course_id, instructor_id, feedback_type, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11 } = req.body;
+  const required = { student_id, course_id, instructor_id, feedback_type, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10 };
+  const missing = Object.entries(required).filter(([, v]) => v == null || String(v).trim() === "").map(([k]) => k);
 
-  const required = {
-    student_id,
-    course_id,
-    instructor_id,
-    feedback_type,
-    q1,
-    q2,
-    q3,
-    q4,
-    q5,
-    q6,
-    q7,
-    q8,
-    q9,
-    q10,
-  };
-
-  const missing = Object.entries(required)
-    .filter(([, v]) => v === undefined || v === null || String(v).trim() === "")
-    .map(([k]) => k);
-
-  if (missing.length) {
-    return res.status(400).json({
-      error: "Missing required fields.",
-      fields: missing,
-    });
-  }
+  if (missing.length) return res.status(400).json({ error: "Missing required fields.", fields: missing });
 
   try {
-    // Ensure student is enrolled in this course
     const { data: enrollment, error: enrollmentErr } = await supabase
       .from("enrollments")
       .select("enrollment_id, status, course:courses(faculty_id)")
@@ -299,21 +280,13 @@ exports.submitInstructorFeedback = async (req, res) => {
       .maybeSingle();
 
     if (enrollmentErr) throw enrollmentErr;
-
     if (!enrollment || enrollment.status !== "ENROLLED") {
-      return res.status(403).json({
-        error: "You can submit feedback only for courses you are enrolled in.",
-      });
+      return res.status(403).json({ error: "You can submit feedback only for courses you are enrolled in." });
     }
-
-    // Ensure the instructor matches the course instructor (simple 1-instructor model)
     if (String(enrollment.course?.faculty_id) !== String(instructor_id)) {
-      return res.status(403).json({
-        error: "Invalid instructor for this course.",
-      });
+      return res.status(403).json({ error: "Invalid instructor for this course." });
     }
 
-    // Enforce "only once" per student+course+instructor+type
     const { data: existing, error: existingErr } = await supabase
       .from("course_instructor_feedback")
       .select("feedback_id")
@@ -324,38 +297,15 @@ exports.submitInstructorFeedback = async (req, res) => {
       .maybeSingle();
 
     if (existingErr) throw existingErr;
-
     if (existing) {
-      return res.status(400).json({
-        error: "Feedback already submitted.",
-        message: "Feedback for this course instructor can be submitted only once.",
-      });
+      return res.status(400).json({ error: "Feedback already submitted.", message: "Feedback for this course instructor can be submitted only once." });
     }
 
-    const { error: insertErr } = await supabase
-      .from("course_instructor_feedback")
-      .insert([
-        {
-          student_id,
-          course_id,
-          instructor_id,
-          feedback_type,
-          q1,
-          q2,
-          q3,
-          q4,
-          q5,
-          q6,
-          q7,
-          q8,
-          q9,
-          q10,
-          q11: q11 || null,
-        },
-      ]);
+    const { error: insertErr } = await supabase.from("course_instructor_feedback").insert([{
+          student_id, course_id, instructor_id, feedback_type, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11: q11 || null,
+        }]);
 
     if (insertErr) throw insertErr;
-
     res.status(201).json({ message: "Feedback submitted successfully." });
   } catch (err) {
     console.error("SUBMIT FEEDBACK ERROR:", err);

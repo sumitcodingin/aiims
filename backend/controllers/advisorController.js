@@ -1,4 +1,5 @@
 const supabase = require("../supabaseClient");
+const { sendStatusEmail } = require('../utils/sendEmail');
 
 /* ===================================================
    1. Advisor approves / rejects STUDENT enrollment
@@ -18,13 +19,19 @@ exports.approveByAdvisor = async (req, res) => {
       return res.status(404).json({ error: "Advisor not found." });
     }
 
-    // Enrollment + student
+    // Enrollment + student + course (Fetched details for Email)
     const { data: enrollment } = await supabase
       .from("enrollments")
       .select(`
         status,
         student:users!student_id (
+          full_name,
+          email,
           department
+        ),
+        course:courses (
+          title,
+          course_code
         )
       `)
       .eq("enrollment_id", enrollmentId)
@@ -49,10 +56,33 @@ exports.approveByAdvisor = async (req, res) => {
     const newStatus =
       action === "ACCEPT" ? "ENROLLED" : "ADVISOR_REJECTED";
 
-    await supabase
+    // Update Status
+    const { error: updateError } = await supabase
       .from("enrollments")
       .update({ status: newStatus })
       .eq("enrollment_id", enrollmentId);
+    
+    if (updateError) throw updateError;
+
+    // If Enrolled, increment count
+    if (newStatus === "ENROLLED") {
+      await supabase.rpc('increment_enrolled_count', { row_id: enrollmentId }); 
+      // Or manual increment if RPC not set up, but let's stick to status update for now.
+      // Note: Usually you should increment course enrolled_count here if you are tracking it manually in 'courses' table.
+      // Assuming a trigger or separate logic handles 'enrolled_count', otherwise:
+      /* await supabase.rpc('increment_course_enrollment', { c_id: enrollment.course.course_id }); 
+      */
+    }
+
+    // 🚀 SEND EMAIL
+    if (enrollment.student && enrollment.course) {
+      await sendStatusEmail(
+        enrollment.student.email,
+        enrollment.student.full_name,
+        enrollment.course.title,
+        newStatus
+      );
+    }
 
     res.json({
       message: "Advisor decision recorded.",
@@ -96,10 +126,9 @@ exports.getAdvisorCourses = async (req, res) => {
       `)
       .eq("status", "PENDING_ADVISOR_APPROVAL");
 
-    // Filter in JS (IMPORTANT)
     const uniqueCourses = {};
-    data.forEach((row) => {
-      if (row.student.department === advisor.department) {
+    (data || []).forEach((row) => {
+      if (row.student && row.student.department === advisor.department) {
         uniqueCourses[row.course.course_id] = row.course;
       }
     });
@@ -143,9 +172,8 @@ exports.getPendingStudentsForCourse = async (req, res) => {
       .eq("course_id", course_id)
       .eq("status", "PENDING_ADVISOR_APPROVAL");
 
-    // Filter by department in JS
-    const filtered = data.filter(
-      (e) => e.student.department === advisor.department
+    const filtered = (data || []).filter(
+      (e) => e.student && e.student.department === advisor.department
     );
 
     res.json(filtered);
@@ -168,9 +196,7 @@ exports.approveCourse = async (req, res) => {
       .eq("user_id", advisor_id)
       .single();
 
-    if (!advisor) {
-      return res.status(404).json({ error: "Advisor not found." });
-    }
+    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
 
     const { data: course } = await supabase
       .from("courses")
@@ -178,33 +204,24 @@ exports.approveCourse = async (req, res) => {
       .eq("course_id", course_id)
       .single();
 
-    if (!course) {
-      return res.status(404).json({ error: "Course not found." });
-    }
+    if (!course) return res.status(404).json({ error: "Course not found." });
 
     if (course.department !== advisor.department) {
-      return res.status(403).json({
-        error: "Unauthorized course approval."
-      });
+      return res.status(403).json({ error: "Unauthorized course approval." });
     }
 
     if (course.status !== "PENDING_ADVISOR_APPROVAL") {
-      return res.status(400).json({
-        error: "Course already finalized."
-      });
+      return res.status(400).json({ error: "Course already finalized." });
     }
 
-    const newStatus =
-      action === "APPROVE" ? "APPROVED" : "REJECTED";
+    const newStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
 
     await supabase
       .from("courses")
       .update({ status: newStatus })
       .eq("course_id", course_id);
 
-    res.json({
-      message: `Course ${newStatus.toLowerCase()} successfully.`
-    });
+    res.json({ message: `Course ${newStatus.toLowerCase()} successfully.` });
   } catch (err) {
     console.error("COURSE APPROVAL ERROR:", err);
     res.status(500).json({ error: "Course approval failed." });
@@ -218,18 +235,14 @@ exports.getPendingCourses = async (req, res) => {
   const { advisor_id } = req.query;
 
   try {
-    // 1. Identify the advisor's department to filter relevant courses
     const { data: advisor } = await supabase
       .from("users")
       .select("department")
       .eq("user_id", advisor_id)
       .single();
 
-    if (!advisor) {
-      return res.status(404).json({ error: "Advisor not found." });
-    }
+    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
 
-    // 2. Fetch courses in the advisor's department with PENDING_ADVISOR_APPROVAL status
     const { data: courses, error } = await supabase
       .from("courses")
       .select(`
@@ -249,7 +262,6 @@ exports.getPendingCourses = async (req, res) => {
       .eq("status", "PENDING_ADVISOR_APPROVAL");
 
     if (error) throw error;
-
     res.json(courses || []);
   } catch (err) {
     console.error("GET PENDING COURSES ERROR:", err);
