@@ -181,3 +181,184 @@ exports.getStudentProfile = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch student profile.' });
   }
 };
+
+// ===================================
+// Course Instructor Feedback (Student)
+// ===================================
+
+// 1) List eligible course-instructor pairs (ENROLLED only)
+exports.getFeedbackOptions = async (req, res) => {
+  const { student_id } = req.query;
+
+  if (!student_id) {
+    return res.status(400).json({ error: "student_id is required." });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("enrollments")
+      .select(
+        `
+          course_id,
+          courses:courses (
+            course_id,
+            course_code,
+            title,
+            acad_session,
+            faculty_id,
+            instructor:users!courses_faculty_id_fkey (
+              user_id,
+              full_name
+            )
+          )
+        `
+      )
+      .eq("student_id", student_id)
+      .eq("status", "ENROLLED");
+
+    if (error) throw error;
+
+    const options =
+      (data || [])
+        .map((row) => {
+          const c = row.courses;
+          if (!c) return null;
+          return {
+            course_id: c.course_id,
+            course_code: c.course_code,
+            title: c.title,
+            acad_session: c.acad_session,
+            instructor_id: c.faculty_id,
+            instructor_name: c.instructor?.full_name || "—",
+          };
+        })
+        .filter(Boolean) || [];
+
+    res.json(options);
+  } catch (err) {
+    console.error("GET FEEDBACK OPTIONS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch feedback options." });
+  }
+};
+
+// 2) Submit feedback (anonymous to instructor; stored with student_id for one-time enforcement)
+exports.submitInstructorFeedback = async (req, res) => {
+  const {
+    student_id,
+    course_id,
+    instructor_id,
+    feedback_type,
+    q1,
+    q2,
+    q3,
+    q4,
+    q5,
+    q6,
+    q7,
+    q8,
+    q9,
+    q10,
+    q11,
+  } = req.body;
+
+  const required = {
+    student_id,
+    course_id,
+    instructor_id,
+    feedback_type,
+    q1,
+    q2,
+    q3,
+    q4,
+    q5,
+    q6,
+    q7,
+    q8,
+    q9,
+    q10,
+  };
+
+  const missing = Object.entries(required)
+    .filter(([, v]) => v === undefined || v === null || String(v).trim() === "")
+    .map(([k]) => k);
+
+  if (missing.length) {
+    return res.status(400).json({
+      error: "Missing required fields.",
+      fields: missing,
+    });
+  }
+
+  try {
+    // Ensure student is enrolled in this course
+    const { data: enrollment, error: enrollmentErr } = await supabase
+      .from("enrollments")
+      .select("enrollment_id, status, course:courses(faculty_id)")
+      .eq("student_id", student_id)
+      .eq("course_id", course_id)
+      .maybeSingle();
+
+    if (enrollmentErr) throw enrollmentErr;
+
+    if (!enrollment || enrollment.status !== "ENROLLED") {
+      return res.status(403).json({
+        error: "You can submit feedback only for courses you are enrolled in.",
+      });
+    }
+
+    // Ensure the instructor matches the course instructor (simple 1-instructor model)
+    if (String(enrollment.course?.faculty_id) !== String(instructor_id)) {
+      return res.status(403).json({
+        error: "Invalid instructor for this course.",
+      });
+    }
+
+    // Enforce "only once" per student+course+instructor+type
+    const { data: existing, error: existingErr } = await supabase
+      .from("course_instructor_feedback")
+      .select("feedback_id")
+      .eq("student_id", student_id)
+      .eq("course_id", course_id)
+      .eq("instructor_id", instructor_id)
+      .eq("feedback_type", feedback_type)
+      .maybeSingle();
+
+    if (existingErr) throw existingErr;
+
+    if (existing) {
+      return res.status(400).json({
+        error: "Feedback already submitted.",
+        message: "Feedback for this course instructor can be submitted only once.",
+      });
+    }
+
+    const { error: insertErr } = await supabase
+      .from("course_instructor_feedback")
+      .insert([
+        {
+          student_id,
+          course_id,
+          instructor_id,
+          feedback_type,
+          q1,
+          q2,
+          q3,
+          q4,
+          q5,
+          q6,
+          q7,
+          q8,
+          q9,
+          q10,
+          q11: q11 || null,
+        },
+      ]);
+
+    if (insertErr) throw insertErr;
+
+    res.status(201).json({ message: "Feedback submitted successfully." });
+  } catch (err) {
+    console.error("SUBMIT FEEDBACK ERROR:", err);
+    res.status(500).json({ error: "Failed to submit feedback." });
+  }
+};

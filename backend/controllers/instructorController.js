@@ -191,6 +191,51 @@ const floatCourse = async (req, res) => {
 };
 
 // ===================================================
+// 6. Get Anonymous Course Instructor Feedback (INSTRUCTOR)
+// ===================================================
+const getInstructorFeedback = async (req, res) => {
+  const { instructor_id, course_id, feedback_type } = req.query;
+
+  if (!instructor_id) {
+    return res.status(400).json({ error: "instructor_id is required." });
+  }
+
+  try {
+    let query = supabase
+      .from("course_instructor_feedback")
+      .select(
+        `
+          feedback_id,
+          course_id,
+          instructor_id,
+          feedback_type,
+          q1,q2,q3,q4,q5,q6,q7,q8,q9,q10,q11,
+          created_at,
+          course:courses (
+            course_code,
+            title,
+            acad_session
+          )
+        `
+      )
+      .eq("instructor_id", instructor_id)
+      .order("created_at", { ascending: false });
+
+    if (course_id) query = query.eq("course_id", course_id);
+    if (feedback_type) query = query.eq("feedback_type", feedback_type);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Never expose student_id (anonymous)
+    res.json(data || []);
+  } catch (err) {
+    console.error("GET INSTRUCTOR FEEDBACK ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch feedback." });
+  }
+};
+
+// ===================================================
 // EXPORTS
 // ===================================================
 module.exports = {
@@ -199,4 +244,5 @@ module.exports = {
   approveByInstructor,
   awardGrade,
   floatCourse,
+  getInstructorFeedback,
 };
