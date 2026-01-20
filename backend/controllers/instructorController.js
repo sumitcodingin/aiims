@@ -1,6 +1,5 @@
 const supabase = require("../supabaseClient");
 
-
 // ===================================================
 // 1. Get COURSES offered by instructor
 // ===================================================
@@ -16,7 +15,7 @@ const getInstructorCourses = async (req, res) => {
         title,
         acad_session,
         status,
-        credits  // 🚀 Added credits to selection (optional, but good for display)
+        credits
       `)
       .eq("faculty_id", instructor_id);
 
@@ -25,10 +24,11 @@ const getInstructorCourses = async (req, res) => {
     res.status(200).json(data);
   } catch (err) {
     console.error("GET INSTRUCTOR COURSES ERROR:", err);
-    res.status(500).json({ error: "Failed to fetch instructor courses." });
+    res.status(500).json({
+      error: "Failed to fetch instructor courses.",
+    });
   }
 };
-
 
 // ===================================================
 // 2. Get PENDING applications for a selected course
@@ -57,10 +57,11 @@ const getCourseApplications = async (req, res) => {
     res.status(200).json(data);
   } catch (err) {
     console.error("GET COURSE APPLICATIONS ERROR:", err);
-    res.status(500).json({ error: "Failed to fetch applications." });
+    res.status(500).json({
+      error: "Failed to fetch applications.",
+    });
   }
 };
-
 
 // ===================================================
 // 3. Approve / Reject enrollment (INSTRUCTOR)
@@ -69,7 +70,6 @@ const approveByInstructor = async (req, res) => {
   const { enrollmentId, action, instructor_id } = req.body;
 
   try {
-    // Fetch enrollment + course
     const { data: enrollment, error } = await supabase
       .from("enrollments")
       .select(`
@@ -85,7 +85,6 @@ const approveByInstructor = async (req, res) => {
       return res.status(404).json({ error: "Enrollment not found." });
     }
 
-    // Ownership check
     if (enrollment.course.faculty_id !== instructor_id) {
       return res.status(403).json({ error: "Unauthorized instructor." });
     }
@@ -115,7 +114,6 @@ const approveByInstructor = async (req, res) => {
     res.status(500).json({ error: "Approval failed." });
   }
 };
-
 
 // ===================================================
 // 4. Award Grade (ONLY AFTER ENROLLED)
@@ -150,7 +148,6 @@ const awardGrade = async (req, res) => {
   }
 };
 
-
 // ===================================================
 // 5. Float a Course (INSTRUCTOR)
 // ===================================================
@@ -160,7 +157,7 @@ const floatCourse = async (req, res) => {
     title,
     department,
     acad_session,
-    credits,  // 🚀 Get credits from request
+    credits,
     capacity,
     advisor_id,
     instructor_id,
@@ -173,7 +170,7 @@ const floatCourse = async (req, res) => {
         title,
         department,
         acad_session,
-        credits, // 🚀 Save to database column
+        credits,
         capacity,
         faculty_id: instructor_id,
         advisor_id,
@@ -192,7 +189,6 @@ const floatCourse = async (req, res) => {
     res.status(500).json({ error: "Failed to float course." });
   }
 };
-
 
 // ===================================================
 // EXPORTS
