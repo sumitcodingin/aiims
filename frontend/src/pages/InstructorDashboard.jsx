@@ -1,6 +1,7 @@
 import { useState } from "react";
 import InstructorApprovals from "./instructor/InstructorApprovals";
 import FloatCourse from "./instructor/FloatCourse";
+import InstructorFeedback from "./instructor/InstructorFeedback";
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
@@ -37,6 +38,13 @@ export default function InstructorDashboard() {
             </NavBtn>
 
             <NavBtn
+              active={activeTab === "feedback"}
+              onClick={() => setActiveTab("feedback")}
+            >
+              Feedback
+            </NavBtn>
+
+            <NavBtn
               active={activeTab === "profile"}
               onClick={() => setActiveTab("profile")}
             >
@@ -65,6 +73,9 @@ export default function InstructorDashboard() {
         {activeTab === "float" && (
           <FloatCourse onSuccess={() => setActiveTab("approvals")} />
         )}
+
+        {/* FEEDBACK */}
+        {activeTab === "feedback" && <InstructorFeedback />}
 
         {/* PROFILE */}
         {activeTab === "profile" && (

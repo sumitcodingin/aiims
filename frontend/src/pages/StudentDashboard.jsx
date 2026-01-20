@@ -2,6 +2,7 @@ import { useState } from "react";
 import Courses from "./student/Courses";
 import StudentProfile from "./student/StudentProfile";
 import StudentRecords from "./student/StudentRecords";
+import CourseInstructorFeedback from "./student/CourseInstructorFeedback";
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("courses");
@@ -38,6 +39,11 @@ export default function StudentDashboard() {
               active={activeTab === "records"}
               onClick={() => setActiveTab("records")}
             />
+            <NavButton
+              label="Feedback"
+              active={activeTab === "feedback"}
+              onClick={() => setActiveTab("feedback")}
+            />
           </div>
         </div>
 
@@ -61,6 +67,7 @@ export default function StudentDashboard() {
         {activeTab === "courses" && <Courses />}
         {activeTab === "profile" && <StudentProfile />}
         {activeTab === "records" && <StudentRecords />}
+        {activeTab === "feedback" && <CourseInstructorFeedback />}
       </main>
     </div>
   );
