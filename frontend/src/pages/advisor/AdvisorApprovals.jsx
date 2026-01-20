@@ -7,10 +7,9 @@ export default function AdvisorApprovals() {
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  /* ===============================
-     1. Fetch courses for advisor
-  =============================== */
+  /* ================= FETCH COURSES ================= */
   useEffect(() => {
     api
       .get("/advisor/courses", {
@@ -20,17 +19,16 @@ export default function AdvisorApprovals() {
       .catch(() => setCourses([]));
   }, [user.id]);
 
-  /* ===============================
-     2. Fetch students for course
-  =============================== */
-  const fetchStudents = async (courseId) => {
-    setSelectedCourse(courseId);
+  /* ================= FETCH STUDENTS ================= */
+  const fetchStudents = async (course) => {
+    setSelectedCourse(course);
+    setLoading(true);
 
     try {
       const res = await api.get("/advisor/pending-students", {
         params: {
           advisor_id: user.id,
-          course_id: courseId,
+          course_id: course.course_id,
         },
       });
 
@@ -38,12 +36,12 @@ export default function AdvisorApprovals() {
     } catch (err) {
       console.error("FETCH STUDENTS ERROR:", err);
       setStudents([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  /* ===============================
-     3. Approve / Reject student
-  =============================== */
+  /* ================= APPROVE / REJECT ================= */
   const handleAction = async (enrollmentId, action) => {
     await api.post("/advisor/approve-request", {
       enrollmentId,
@@ -57,73 +55,128 @@ export default function AdvisorApprovals() {
   };
 
   return (
-    <div className="max-w-4xl">
-      <h2 className="text-xl font-bold mb-4">
-        Pending Advisor Approvals
-      </h2>
+    <div className="max-w-6xl">
+      {/* ================= COURSE LIST ================= */}
+      {!selectedCourse && (
+        <>
+          <h2 className="text-2xl font-bold mb-6">Courses</h2>
 
-      {/* COURSE SELECTOR */}
-      <select
-        className="border p-2 rounded mb-6 w-full"
-        onChange={(e) => fetchStudents(e.target.value)}
-        defaultValue=""
-      >
-        <option value="" disabled>
-          Select Course
-        </option>
-        {courses.map((c) => (
-          <option key={c.course_id} value={c.course_id}>
-            {c.course_code} - {c.title}
-          </option>
-        ))}
-      </select>
+          {courses.length === 0 ? (
+            <p className="text-gray-600">No courses assigned.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {courses.map((course) => (
+                <CourseCard
+                  key={course.course_id}
+                  course={course}
+                  onView={() => fetchStudents(course)}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
-      {/* STUDENT LIST */}
+      {/* ================= STUDENT APPROVALS ================= */}
       {selectedCourse && (
         <>
-          {students.length === 0 ? (
+          <button
+            onClick={() => {
+              setSelectedCourse(null);
+              setStudents([]);
+            }}
+            className="text-blue-600 mb-4 hover:underline"
+          >
+            ← Back to My Courses
+          </button>
+
+          <div className="bg-white shadow rounded-xl p-6 mb-6">
+            <h3 className="text-xl font-bold">
+              {selectedCourse.course_code} — {selectedCourse.title}
+            </h3>
+            <p className="text-gray-600 text-sm mt-1">
+              {selectedCourse.department} • {selectedCourse.acad_session}
+            </p>
+          </div>
+
+          {loading ? (
+            <p className="text-gray-600">Loading enrollment requests...</p>
+          ) : students.length === 0 ? (
             <p className="text-gray-600">
               No pending students for this course.
             </p>
           ) : (
-            students.map((s) => (
-              <div
-                key={s.enrollment_id}
-                className="bg-white p-4 shadow rounded mb-3 flex justify-between items-center"
-              >
-                <div>
-                  <p className="font-semibold">{s.student.full_name}</p>
-                  <p className="text-sm text-gray-600">
-                    {s.student.email}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Dept: {s.student.department}
-                  </p>
-                </div>
+            <div className="space-y-4">
+              {students.map((s) => (
+                <div
+                  key={s.enrollment_id}
+                  className="bg-white shadow rounded-lg p-4 flex justify-between items-center"
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {s.student.full_name}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {s.student.email}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Dept: {s.student.department}
+                    </p>
+                  </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() =>
-                      handleAction(s.enrollment_id, "ACCEPT")
-                    }
-                    className="bg-green-600 text-white px-3 py-1 rounded"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={() =>
-                      handleAction(s.enrollment_id, "REJECT")
-                    }
-                    className="bg-red-600 text-white px-3 py-1 rounded"
-                  >
-                    Reject
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        handleAction(s.enrollment_id, "ACCEPT")
+                      }
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded"
+                    >
+                      Accept
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        handleAction(s.enrollment_id, "REJECT")
+                      }
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded"
+                    >
+                      Reject
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/* ================= COURSE CARD ================= */
+
+function CourseCard({ course, onView }) {
+  return (
+    <div className="bg-white shadow rounded-xl p-6 flex flex-col justify-between">
+      <div>
+        <h3 className="text-lg font-bold">{course.course_code}</h3>
+        <p className="font-medium text-gray-700">
+          {course.title}
+        </p>
+
+        <div className="text-sm text-gray-600 mt-2 space-y-1">
+          <p>Department: {course.department}</p>
+          <p>Session: {course.acad_session}</p>
+          <p>Capacity: {course.capacity}</p>
+        </div>
+      </div>
+
+      <button
+        onClick={onView}
+        className="mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
+      >
+        View Enrollment Requests
+      </button>
     </div>
   );
 }
