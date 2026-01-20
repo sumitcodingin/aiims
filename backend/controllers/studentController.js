@@ -19,7 +19,7 @@ exports.applyForCourse = async (req, res) => {
 
     if (existing) {
       // 2. If it exists and was dropped, "re-activate" it
-      if (existing.status === 'DROPPED_BY_STUDENT') {
+      if (existing.status === 'DROPPED_BY_STUDENT' || existing.status === 'INSTRUCTOR_REJECTED' || existing.status === 'ADVISOR_REJECTED') {
         const { error: updateError } = await supabase
           .from('enrollments')
           .update({ 
@@ -51,11 +51,11 @@ exports.applyForCourse = async (req, res) => {
     if (insertError) throw insertError;
 
     res.status(201).json({
-      message: 'Application submitted. Awaiting instructor approval.',
+      message: 'Enrollment request submitted. Awaiting instructor approval.',
     });
   } catch (err) {
     console.error('APPLY COURSE ERROR:', err);
-    res.status(500).json({ error: 'Failed to apply for course.' });
+    res.status(500).json({ error: 'Failed to submit enrollment request.' });
   }
 };
 

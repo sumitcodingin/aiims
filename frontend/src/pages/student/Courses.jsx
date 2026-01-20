@@ -58,18 +58,18 @@ export default function Courses() {
     setSearch({ ...search, [e.target.name]: e.target.value });
   };
 
-  // Apply for course
+  // Enroll (apply) for course
   const apply = async (course_id) => {
     try {
       await api.post("/student/apply", {
         student_id: user.id,
         course_id,
       });
-      alert("Application submitted.");
+      alert("Enrollment request submitted.");
       fetchData(); 
       setSelectedCourse(null);
     } catch (err) {
-      alert(err.response?.data?.message || "Already applied for this course.");
+      alert(err.response?.data?.message || "You already have an active request for this course.");
     }
   };
 
@@ -148,7 +148,11 @@ export default function Courses() {
   const getCourseActions = (course) => {
     const enrollment = appliedMap[course.course_id];
     const status = enrollment?.status;
-    const canApply = !enrollment || status === "DROPPED_BY_STUDENT";
+    const canApply =
+      !enrollment ||
+      status === "DROPPED_BY_STUDENT" ||
+      status === "INSTRUCTOR_REJECTED" ||
+      status === "ADVISOR_REJECTED";
     const canDrop = enrollment && 
                     status !== "DROPPED_BY_STUDENT" && 
                     status !== "INSTRUCTOR_REJECTED" && 
@@ -211,7 +215,7 @@ export default function Courses() {
                   {canApply && (
                     <button onClick={(e) => { e.stopPropagation(); apply(c.course_id); }}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm transition">
-                      Apply
+                      Enroll
                     </button>
                   )}
 
@@ -284,7 +288,7 @@ export default function Courses() {
                         onClick={() => apply(selectedCourse.course_id)}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded transition font-semibold"
                       >
-                        Apply Now
+                        Enroll Now
                       </button>
                     )}
                     {canDrop && (
