@@ -4,9 +4,13 @@ import api from "../../services/api";
 export default function StudentRecords() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const user = JSON.parse(sessionStorage.getItem("user"));
 
-  const CURRENT_SESSION = "2025-II"; // 🔴 can be dynamic later
+  // 🔍 Filters
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+
+  const user = JSON.parse(sessionStorage.getItem("user"));
+  const CURRENT_SESSION = "2025-II";
 
   useEffect(() => {
     setLoading(true);
@@ -60,19 +64,70 @@ export default function StudentRecords() {
   };
 
   // -------------------------
+  // Filtering Logic
+  // -------------------------
+  const filteredRecords = records.filter((r) => {
+    const matchesSearch =
+      r.courses.course_code.toLowerCase().includes(search.toLowerCase()) ||
+      r.courses.title.toLowerCase().includes(search.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      r.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // -------------------------
   // UI
   // -------------------------
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-4">
+      <h2 className="text-2xl font-bold mb-6">
         Academic Records ({CURRENT_SESSION})
       </h2>
 
+      {/* 🔍 Filter Bar */}
+      <div className="bg-white p-4 rounded shadow mb-6 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="Search by course code or title"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full md:w-1/2 px-4 py-2 border rounded focus:outline-none focus:ring"
+        />
+
+        {/* Status Filter */}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="w-full md:w-1/3 px-4 py-2 border rounded bg-white focus:outline-none focus:ring"
+        >
+          <option value="ALL">All Status</option>
+          <option value="ENROLLED">Enrolled</option>
+          <option value="PENDING_INSTRUCTOR_APPROVAL">
+            Pending Instructor Approval
+          </option>
+          <option value="PENDING_ADVISOR_APPROVAL">
+            Pending Advisor Approval
+          </option>
+          <option value="INSTRUCTOR_REJECTED">
+            Rejected by Instructor
+          </option>
+          <option value="ADVISOR_REJECTED">
+            Rejected by Advisor
+          </option>
+          <option value="DROPPED_BY_STUDENT">Dropped</option>
+        </select>
+      </div>
+
+      {/* Table */}
       {loading ? (
         <p className="text-gray-600">Loading records...</p>
-      ) : records.length === 0 ? (
+      ) : filteredRecords.length === 0 ? (
         <p className="text-gray-600">
-          No courses taken this semester.
+          No courses match your filters.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -86,7 +141,7 @@ export default function StudentRecords() {
               </tr>
             </thead>
             <tbody>
-              {records.map((r) => (
+              {filteredRecords.map((r) => (
                 <tr
                   key={r.enrollment_id}
                   className="border-t hover:bg-gray-50"
