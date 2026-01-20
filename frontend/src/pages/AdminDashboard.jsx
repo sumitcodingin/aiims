@@ -6,6 +6,14 @@ export default function AdminDashboard() {
   const [filterRole, setFilterRole] = useState("");   
   const [filterStatus, setFilterStatus] = useState("PENDING"); 
 
+  // ==========================
+  // 1. Logout Function
+  // ==========================
+  const logout = () => {
+    sessionStorage.removeItem("user");
+    window.location.href = "/";
+  };
+
   const fetchUsers = async () => {
     try {
       const params = {};
@@ -59,11 +67,26 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      {/* HEADER SECTION */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-        <button onClick={handleReset} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow">
-          Reset Enrollments
-        </button>
+        
+        {/* ACTION BUTTONS GROUP */}
+        <div className="flex gap-3">
+          <button 
+            onClick={handleReset} 
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow"
+          >
+            Reset Enrollments
+          </button>
+          
+          <button 
+            onClick={logout} 
+            className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded shadow"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       {/* FILTERS */}

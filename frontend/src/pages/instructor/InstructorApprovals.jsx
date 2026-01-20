@@ -13,12 +13,17 @@ export default function InstructorApprovals() {
 
   /* ================= FETCH COURSES ================= */
   useEffect(() => {
+    if (!user?.id) return;
+    
     api
       .get("/instructor/courses", {
         params: { instructor_id: user.id },
       })
       .then((res) => setCourses(res.data || []))
-      .catch(() => setCourses([]));
+      .catch((err) => {
+        console.error("Failed to fetch courses:", err);
+        setCourses([]);
+      });
   }, [user.id]);
 
   /* ================= FETCH APPLICATIONS & ENROLLED ================= */
@@ -31,7 +36,10 @@ export default function InstructorApprovals() {
         params: { course_id: selectedCourse.course_id },
       })
       .then((res) => setApplications(res.data || []))
-      .catch(() => setApplications([]))
+      .catch((err) => {
+        console.error("Failed to fetch applications:", err);
+        setApplications([]);
+      })
       .finally(() => setLoading(false));
   }, [selectedCourse]);
 
@@ -53,7 +61,22 @@ export default function InstructorApprovals() {
       setApplications((prev) =>
         prev.filter((a) => a.enrollment_id !== enrollmentId)
       );
-    } catch {
+      
+      // Update the count in the course list locally (optional UX improvement)
+      if (action === "REMOVE") {
+         setCourses(prevCourses => prevCourses.map(c => 
+            c.course_id === selectedCourse.course_id 
+             ? { ...c, enrolled_count: Math.max(0, (c.enrolled_count || 0) - 1) } 
+             : c
+         ));
+         // Update selected course view too
+         setSelectedCourse(prev => ({
+             ...prev,
+             enrolled_count: Math.max(0, (prev.enrolled_count || 0) - 1)
+         }));
+      }
+
+    } catch (err) {
       alert("Failed to update student status.");
     }
   };
@@ -127,7 +150,7 @@ export default function InstructorApprovals() {
             <div className="text-sm text-gray-700 mt-2 space-y-1">
               <p><span className="font-semibold">Department:</span> {selectedCourse.department}</p>
               <p><span className="font-semibold">Session:</span> {selectedCourse.acad_session}</p>
-              <p><span className="font-semibold">Seats:</span> {selectedCourse.enrolled_count || 0} / {selectedCourse.capacity}</p>
+              <p><span className="font-semibold text-blue-700">Seats:</span> {selectedCourse.enrolled_count || 0} / {selectedCourse.capacity}</p>
             </div>
           </div>
 
@@ -234,7 +257,7 @@ function CourseCard({ course, onView }) {
         <div className="text-sm text-gray-600 mt-3 space-y-1">
           <p><span className="font-semibold text-gray-800">Department:</span> {course.department}</p>
           <p><span className="font-semibold text-gray-800">Session:</span> {course.acad_session}</p>
-          <p><span className="font-semibold text-gray-800">Seats:</span> {course.enrolled_count || 0} / {course.capacity}</p>
+          <p><span className="font-semibold text-blue-700">Seats:</span> {course.enrolled_count || 0} / {course.capacity}</p>
         </div>
       </div>
 

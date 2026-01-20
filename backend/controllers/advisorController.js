@@ -2,28 +2,54 @@ const supabase = require("../supabaseClient");
 const { sendStatusEmail } = require('../utils/sendEmail');
 
 /* ===================================================
+   Helper: Update Course Enrolled Count
+   (Recalculates count to ensure DB is always correct)
+=================================================== */
+const updateCourseEnrolledCount = async (course_id) => {
+  try {
+    // 1. Get the real count of 'ENROLLED' students
+    const { count, error } = await supabase
+      .from("enrollments")
+      .select("*", { count: "exact", head: true })
+      .eq("course_id", course_id)
+      .eq("status", "ENROLLED");
+
+    if (error) throw error;
+
+    // 2. Update the courses table with the correct number
+    await supabase
+      .from("courses")
+      .update({ enrolled_count: count })
+      .eq("course_id", course_id);
+      
+    console.log(`Updated course ${course_id} count to ${count}`);
+  } catch (err) {
+    console.error("Failed to update course count:", err);
+  }
+};
+
+/* ===================================================
    1. Advisor approves / rejects STUDENT enrollment
 =================================================== */
 exports.approveByAdvisor = async (req, res) => {
   const { enrollmentId, action, advisor_id } = req.body;
 
   try {
-    // Advisor department
+    // Advisor permission check
     const { data: advisor } = await supabase
       .from("users")
       .select("department")
       .eq("user_id", advisor_id)
       .single();
 
-    if (!advisor) {
-      return res.status(404).json({ error: "Advisor not found." });
-    }
+    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
 
-    // Enrollment + student + course (Fetched details for Email)
+    // Fetch Enrollment
     const { data: enrollment } = await supabase
       .from("enrollments")
       .select(`
         status,
+        course_id,
         student:users!student_id (
           full_name,
           email,
@@ -37,26 +63,19 @@ exports.approveByAdvisor = async (req, res) => {
       .eq("enrollment_id", enrollmentId)
       .single();
 
-    if (!enrollment) {
-      return res.status(404).json({ error: "Enrollment not found." });
-    }
+    if (!enrollment) return res.status(404).json({ error: "Enrollment not found." });
 
     if (enrollment.status !== "PENDING_ADVISOR_APPROVAL") {
-      return res.status(400).json({
-        error: "Enrollment not ready for advisor approval."
-      });
+      return res.status(400).json({ error: "Enrollment not ready for advisor approval." });
     }
 
     if (enrollment.student.department !== advisor.department) {
-      return res.status(403).json({
-        error: "Student not from your department."
-      });
+      return res.status(403).json({ error: "Student not from your department." });
     }
 
-    const newStatus =
-      action === "ACCEPT" ? "ENROLLED" : "ADVISOR_REJECTED";
+    const newStatus = action === "ACCEPT" ? "ENROLLED" : "ADVISOR_REJECTED";
 
-    // Update Status
+    // 1. Update Status
     const { error: updateError } = await supabase
       .from("enrollments")
       .update({ status: newStatus })
@@ -64,17 +83,12 @@ exports.approveByAdvisor = async (req, res) => {
     
     if (updateError) throw updateError;
 
-    // If Enrolled, increment count
+    // 2. 🚀 UPDATE DATABASE COUNT (If Approved)
     if (newStatus === "ENROLLED") {
-      await supabase.rpc('increment_enrolled_count', { row_id: enrollmentId }); 
-      // Or manual increment if RPC not set up, but let's stick to status update for now.
-      // Note: Usually you should increment course enrolled_count here if you are tracking it manually in 'courses' table.
-      // Assuming a trigger or separate logic handles 'enrolled_count', otherwise:
-      /* await supabase.rpc('increment_course_enrollment', { c_id: enrollment.course.course_id }); 
-      */
+      await updateCourseEnrolledCount(enrollment.course_id);
     }
 
-    // 🚀 SEND EMAIL
+    // 3. Send Email
     if (enrollment.student && enrollment.course) {
       await sendStatusEmail(
         enrollment.student.email,
@@ -84,10 +98,7 @@ exports.approveByAdvisor = async (req, res) => {
       );
     }
 
-    res.json({
-      message: "Advisor decision recorded.",
-      status: newStatus
-    });
+    res.json({ message: "Advisor decision recorded.", status: newStatus });
   } catch (err) {
     console.error("ADVISOR APPROVAL ERROR:", err);
     res.status(500).json({ error: "Advisor approval failed." });
@@ -95,7 +106,7 @@ exports.approveByAdvisor = async (req, res) => {
 };
 
 /* ===================================================
-   2. Get COURSES that have students pending advisor approval
+   2. Get COURSES (Advisor)
 =================================================== */
 exports.getAdvisorCourses = async (req, res) => {
   const { advisor_id } = req.query;
@@ -107,9 +118,7 @@ exports.getAdvisorCourses = async (req, res) => {
       .eq("user_id", advisor_id)
       .single();
 
-    if (!advisor) {
-      return res.status(404).json({ error: "Advisor not found." });
-    }
+    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
 
     const { data } = await supabase
       .from("enrollments")
@@ -141,7 +150,7 @@ exports.getAdvisorCourses = async (req, res) => {
 };
 
 /* ===================================================
-   3. Get STUDENTS pending advisor approval (course-wise)
+   3. Get STUDENTS (Advisor)
 =================================================== */
 exports.getPendingStudentsForCourse = async (req, res) => {
   const { advisor_id, course_id } = req.query;
@@ -153,9 +162,7 @@ exports.getPendingStudentsForCourse = async (req, res) => {
       .eq("user_id", advisor_id)
       .single();
 
-    if (!advisor) {
-      return res.status(404).json({ error: "Advisor not found." });
-    }
+    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
 
     const { data } = await supabase
       .from("enrollments")
@@ -184,42 +191,25 @@ exports.getPendingStudentsForCourse = async (req, res) => {
 };
 
 /* ===================================================
-   4. Advisor approves / rejects FLOATED COURSE
+   4. Approve Course (Floated)
 =================================================== */
 exports.approveCourse = async (req, res) => {
   const { course_id, action, advisor_id } = req.body;
 
   try {
-    const { data: advisor } = await supabase
-      .from("users")
-      .select("department")
-      .eq("user_id", advisor_id)
-      .single();
-
+    const { data: advisor } = await supabase.from("users").select("department").eq("user_id", advisor_id).single();
     if (!advisor) return res.status(404).json({ error: "Advisor not found." });
 
-    const { data: course } = await supabase
-      .from("courses")
-      .select("department, status")
-      .eq("course_id", course_id)
-      .single();
-
+    const { data: course } = await supabase.from("courses").select("department, status").eq("course_id", course_id).single();
     if (!course) return res.status(404).json({ error: "Course not found." });
 
-    if (course.department !== advisor.department) {
-      return res.status(403).json({ error: "Unauthorized course approval." });
-    }
-
-    if (course.status !== "PENDING_ADVISOR_APPROVAL") {
-      return res.status(400).json({ error: "Course already finalized." });
-    }
+    if (course.department !== advisor.department) return res.status(403).json({ error: "Unauthorized." });
+    if (course.status !== "PENDING_ADVISOR_APPROVAL") return res.status(400).json({ error: "Already finalized." });
 
     const newStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
 
-    await supabase
-      .from("courses")
-      .update({ status: newStatus })
-      .eq("course_id", course_id);
+    await supabase.from("courses").update({ status: newStatus })
+    .eq("course_id", course_id);
 
     res.json({ message: `Course ${newStatus.toLowerCase()} successfully.` });
   } catch (err) {
@@ -229,34 +219,19 @@ exports.approveCourse = async (req, res) => {
 };
 
 /* ===================================================
-   5. Get FLOATED COURSES pending advisor approval
+   5. Get Pending Floated Courses
 =================================================== */
 exports.getPendingCourses = async (req, res) => {
   const { advisor_id } = req.query;
-
   try {
-    const { data: advisor } = await supabase
-      .from("users")
-      .select("department")
-      .eq("user_id", advisor_id)
-      .single();
-
+    const { data: advisor } = await supabase.from("users").select("department").eq("user_id", advisor_id).single();
     if (!advisor) return res.status(404).json({ error: "Advisor not found." });
 
     const { data: courses, error } = await supabase
       .from("courses")
       .select(`
-        course_id,
-        course_code,
-        title,
-        acad_session,
-        capacity,
-        department,
-        status,
-        instructor:users!faculty_id (
-          full_name,
-          email
-        )
+        course_id, course_code, title, acad_session, capacity, department, status,
+        instructor:users!faculty_id ( full_name, email )
       `)
       .eq("department", advisor.department)
       .eq("status", "PENDING_ADVISOR_APPROVAL");
