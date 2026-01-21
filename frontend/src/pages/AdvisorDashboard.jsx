@@ -46,9 +46,7 @@ export default function AdvisorDashboard() {
       advisor_id: user.id,
     });
 
-    setPendingCourses((prev) =>
-      prev.filter((c) => c.course_id !== course_id)
-    );
+    setPendingCourses((prev) => prev.filter((c) => c.course_id !== course_id));
   };
 
   /* ================= COURSE FILTER ================= */
@@ -172,23 +170,28 @@ export default function AdvisorDashboard() {
                   </div>
 
                   <div className="flex gap-2">
-                    <button
-                      onClick={() =>
-                        handleCourseAction(c.course_id, "APPROVE")
-                      }
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded"
-                    >
-                      Approve
-                    </button>
+                    {!c.status === "APPROVED" && (
+                      <button
+                        onClick={() =>
+                          handleCourseAction(c.course_id, "APPROVE")
+                        }
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded"
+                      >
+                        Approve
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() =>
-                        handleCourseAction(c.course_id, "REJECT")
-                      }
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded"
-                    >
-                      Reject
-                    </button>
+                    {!c.status === "APPROVED" && (
+                      <button
+                        onClick={() =>
+                          handleCourseAction(c.course_id, "REJECT")
+                        }
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded"
+                      >
+                        Reject
+                      </button>
+                    )}
+                    {c.status==="APPROVED" && <span>Approved</span>}
                   </div>
                 </div>
               ))}

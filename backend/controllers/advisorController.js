@@ -24,198 +24,67 @@ const updateCourseEnrolledCount = async (course_id) => {
 };
 
 /* ===================================================
-   1. Advisor approves / rejects STUDENT enrollment
+   SECTION 1: COURSE APPROVALS (Instructor -> Advisor)
 =================================================== */
-exports.approveByAdvisor = async (req, res) => {
-  const { enrollmentId, action, advisor_id } = req.body;
 
-  try {
-    const { data: advisor } = await supabase.from("users").select("department").eq("user_id", advisor_id).single();
-    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
-
-    const { data: enrollment } = await supabase
-      .from("enrollments")
-      .select(`
-        status, course_id,
-        student:users!student_id ( full_name, email, department ),
-        course:courses ( title, course_code )
-      `)
-      .eq("enrollment_id", enrollmentId)
-      .single();
-
-    if (!enrollment) return res.status(404).json({ error: "Enrollment not found." });
-    if (enrollment.status !== "PENDING_ADVISOR_APPROVAL") return res.status(400).json({ error: "Not pending advisor approval." });
-    if (enrollment.student.department !== advisor.department) return res.status(403).json({ error: "Student not from your department." });
-
-    const newStatus = action === "ACCEPT" ? "ENROLLED" : "ADVISOR_REJECTED";
-
-    // 1. Update Status
-    const { error: updateError } = await supabase
-      .from("enrollments")
-      .update({ status: newStatus })
-      .eq("enrollment_id", enrollmentId);
-    
-    if (updateError) throw updateError;
-
-    // 2. Update DB Count (If Approved)
-    if (newStatus === "ENROLLED") {
-      await updateCourseEnrolledCount(enrollment.course_id);
-    }
-
-    // 3. Send Email
-    if (enrollment.student && enrollment.course) {
-      await sendStatusEmail(enrollment.student.email, enrollment.student.full_name, enrollment.course.title, newStatus);
-    }
-
-    res.json({ message: "Advisor decision recorded.", status: newStatus });
-  } catch (err) {
-    console.error("ADVISOR APPROVAL ERROR:", err);
-    res.status(500).json({ error: "Advisor approval failed." });
-  }
-};
-
-/* ===================================================
-   2. Get COURSES (Advisor) - FILTERED BY DEPT & LIVE COUNTS
-=================================================== */
-exports.getAdvisorCourses = async (req, res) => {
+// A. Get Floated Courses (Pending AND Approved)
+exports.getFloatedCourses = async (req, res) => {
   const { advisor_id } = req.query;
-
   try {
-    const { data: advisor } = await supabase
-      .from("users")
-      .select("department")
-      .eq("user_id", advisor_id)
-      .single();
-
-    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
-
-    // A. Get pending enrollments
-    const { data } = await supabase
-      .from("enrollments")
+    const { data: courses, error } = await supabase
+      .from("courses")
       .select(`
-        course:courses (
-          course_id,
-          course_code,
-          title,
-          department,
-          acad_session, 
-          capacity
-        ),
-        student:users!student_id (
-          department
-        )
+        course_id, course_code, title, acad_session, capacity, department, status, credits,
+        instructor:users!faculty_id ( full_name, email )
       `)
-      .eq("status", "PENDING_ADVISOR_APPROVAL");
+      .eq("advisor_id", advisor_id) // Strict check: Only courses assigned to me
+      .in("status", ["PENDING_ADVISOR_APPROVAL", "APPROVED"]); // Show both so Approved stay visible
 
-    // B. Filter courses relevant to advisor's department
-    const uniqueCourses = {};
-    (data || []).forEach((row) => {
-      // 1. Student must be from Advisor's department
-      // 2. Course must ALSO be from Advisor's department
-      if (
-        row.student && 
-        row.student.department === advisor.department &&
-        row.course &&
-        row.course.department === advisor.department
-      ) {
-        uniqueCourses[row.course.course_id] = row.course;
-      }
-    });
-
-    const coursesList = Object.values(uniqueCourses);
-
-    if (coursesList.length === 0) {
-      return res.json([]);
-    }
-
-    // C. FETCH LIVE ENROLLED COUNTS
-    const courseIds = coursesList.map(c => c.course_id);
-    const { data: enrollments, error: countError } = await supabase
-      .from("enrollments")
-      .select("course_id")
-      .in("course_id", courseIds)
-      .eq("status", "ENROLLED");
-
-    if (countError) throw countError;
-
-    const countMap = {};
-    enrollments.forEach(e => {
-      countMap[e.course_id] = (countMap[e.course_id] || 0) + 1;
-    });
-
-    // D. Attach counts
-    const coursesWithCount = coursesList.map(c => ({
-      ...c,
-      enrolled_count: countMap[c.course_id] || 0
-    }));
-
-    res.json(coursesWithCount);
+    if (error) throw error;
+    res.json(courses || []);
   } catch (err) {
-    console.error("GET ADVISOR COURSES ERROR:", err);
+    console.error("GET FLOATED COURSES ERROR:", err);
     res.status(500).json({ error: "Failed to fetch courses." });
   }
 };
 
-/* ===================================================
-   3. Get STUDENTS (Advisor)
-=================================================== */
-exports.getPendingStudentsForCourse = async (req, res) => {
-  const { advisor_id, course_id } = req.query;
-
-  try {
-    const { data: advisor } = await supabase.from("users").select("department").eq("user_id", advisor_id).single();
-    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
-
-    const { data } = await supabase
-      .from("enrollments")
-      .select(`
-        enrollment_id, status,
-        student:users!student_id ( user_id, full_name, email, department )
-      `)
-      .eq("course_id", course_id)
-      .eq("status", "PENDING_ADVISOR_APPROVAL");
-
-    const filtered = (data || []).filter(e => e.student && e.student.department === advisor.department);
-    res.json(filtered);
-  } catch (err) {
-    console.error("GET ADVISOR STUDENTS ERROR:", err);
-    res.status(500).json({ error: "Failed to fetch students." });
-  }
-};
-
-/* ===================================================
-   4. Approve Course (UPDATED: Checks specific Advisor ID)
-=================================================== */
+// B. Approve / Reject Floated Course
 exports.approveCourse = async (req, res) => {
   const { course_id, action, advisor_id } = req.body;
   try {
-    const { data: advisor } = await supabase.from("users").select("department").eq("user_id", advisor_id).single();
-    if (!advisor) return res.status(404).json({ error: "Advisor not found." });
-    
-    // Fetch course details including assigned advisor_id
+    // 1. Fetch the course
     const { data: course } = await supabase
       .from("courses")
-      .select("department, status, advisor_id")
+      .select("advisor_id, status")
       .eq("course_id", course_id)
       .single();
 
     if (!course) return res.status(404).json({ error: "Course not found." });
 
-    // 🚀 STRICT CHECK: Does this course belong to THIS advisor?
-    // We check IDs as strings to be safe against number/string mismatches
+    // 2. Strict Security Check
     if (String(course.advisor_id) !== String(advisor_id)) {
-      return res.status(403).json({ 
-        error: "You are not the assigned advisor for this course." 
-      });
+      return res.status(403).json({ error: "Unauthorized: You are not the advisor for this instructor." });
     }
 
-    if (course.status !== "PENDING_ADVISOR_APPROVAL") {
-      return res.status(400).json({ error: "Already finalized." });
+    // 3. Set New Status
+    let newStatus = "";
+    if (action === "APPROVE") {
+        newStatus = "APPROVED";
+    } else if (action === "REJECT") {
+        newStatus = "REJECTED";
+    } else {
+        return res.status(400).json({ error: "Invalid action." });
     }
 
-    const newStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
-    await supabase.from("courses").update({ status: newStatus }).eq("course_id", course_id);
-    res.json({ message: `Course ${newStatus.toLowerCase()} successfully.` });
+    // 4. Update Database
+    const { error } = await supabase
+      .from("courses")
+      .update({ status: newStatus })
+      .eq("course_id", course_id);
+    
+    if (error) throw error;
+    
+    res.json({ message: `Course status updated to ${newStatus}.` });
   } catch (err) {
     console.error("COURSE APPROVAL ERROR:", err);
     res.status(500).json({ error: "Course approval failed." });
@@ -223,27 +92,136 @@ exports.approveCourse = async (req, res) => {
 };
 
 /* ===================================================
-   5. Get Pending Floated Courses (UPDATED: Filters by ID)
+   SECTION 2: STUDENT APPROVALS (Student -> Advisor)
 =================================================== */
-exports.getPendingCourses = async (req, res) => {
+
+// A. Get "Union" of Courses
+exports.getAdvisorStudentCourses = async (req, res) => {
   const { advisor_id } = req.query;
+
   try {
-    // We no longer rely solely on 'department'. 
-    // We filter strictly by 'advisor_id' assigned to the course.
-
-    const { data: courses, error } = await supabase
-      .from("courses")
+    const { data } = await supabase
+      .from("enrollments")
       .select(`
-        course_id, course_code, title, acad_session, capacity, department, status,
-        instructor:users!faculty_id ( full_name, email )
+        status,
+        course:courses (
+          course_id, course_code, title, department, acad_session, capacity
+        ),
+        student:users!student_id ( advisor_id )
       `)
-      .eq("advisor_id", advisor_id) // <--- 🚀 FILTERING BY SPECIFIC ADVISOR ID
-      .eq("status", "PENDING_ADVISOR_APPROVAL");
+      .in("status", ["PENDING_ADVISOR_APPROVAL", "ENROLLED"]);
 
-    if (error) throw error;
-    res.json(courses || []);
+    const uniqueCourses = {};
+    const countMap = {};
+
+    (data || []).forEach((row) => {
+      if (row.student && String(row.student.advisor_id) === String(advisor_id) && row.course) {
+        uniqueCourses[row.course.course_id] = row.course;
+      }
+    });
+
+    const coursesList = Object.values(uniqueCourses);
+    if (coursesList.length === 0) return res.json([]);
+
+    const courseIds = coursesList.map(c => c.course_id);
+    const { data: allEnrolled } = await supabase
+      .from("enrollments")
+      .select("course_id")
+      .in("course_id", courseIds)
+      .eq("status", "ENROLLED");
+
+    (allEnrolled || []).forEach(e => {
+      countMap[e.course_id] = (countMap[e.course_id] || 0) + 1;
+    });
+
+    res.json(coursesList.map(c => ({ 
+      ...c, 
+      enrolled_count: countMap[c.course_id] || 0 
+    })));
+
   } catch (err) {
-    console.error("GET PENDING COURSES ERROR:", err);
-    res.status(500).json({ error: "Failed to fetch pending courses." });
+    console.error("GET STUDENT COURSES ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch courses." });
+  }
+};
+
+// B. Get Students for a specific Course Card
+exports.getAdvisorStudentsForCourse = async (req, res) => {
+  const { advisor_id, course_id } = req.query;
+  try {
+    const { data } = await supabase
+      .from("enrollments")
+      .select(`
+        enrollment_id, status,
+        student:users!student_id ( user_id, full_name, email, department, advisor_id )
+      `)
+      .eq("course_id", course_id)
+      .in("status", ["PENDING_ADVISOR_APPROVAL", "ENROLLED"]);
+
+    const myStudents = (data || []).filter(e => 
+      e.student && String(e.student.advisor_id) === String(advisor_id)
+    );
+
+    res.json(myStudents);
+  } catch (err) {
+    console.error("GET COURSE STUDENTS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch students." });
+  }
+};
+
+// C. Approve / Reject / Remove Student
+exports.approveByAdvisor = async (req, res) => {
+  const { enrollmentId, action, advisor_id } = req.body;
+
+  try {
+    const { data: enrollment } = await supabase
+      .from("enrollments")
+      .select(`
+        status, course_id,
+        student:users!student_id ( user_id, full_name, email, department, advisor_id ),
+        course:courses ( title, course_code )
+      `)
+      .eq("enrollment_id", enrollmentId)
+      .single();
+
+    if (!enrollment) return res.status(404).json({ error: "Enrollment not found." });
+
+    if (String(enrollment.student.advisor_id) !== String(advisor_id)) {
+      return res.status(403).json({ error: "You are not this student's advisor." });
+    }
+
+    if (action === "REMOVE" && enrollment.status !== "ENROLLED") {
+      return res.status(400).json({ error: "Can only remove enrolled students." });
+    }
+
+    let newStatus = "";
+    if (action === "ACCEPT") newStatus = "ENROLLED";
+    else if (action === "REJECT") newStatus = "ADVISOR_REJECTED";
+    else if (action === "REMOVE") newStatus = "ADVISOR_REJECTED"; 
+
+    const { error: updateError } = await supabase
+      .from("enrollments")
+      .update({ status: newStatus })
+      .eq("enrollment_id", enrollmentId);
+    
+    if (updateError) throw updateError;
+
+    if (newStatus === "ENROLLED" || action === "REMOVE") {
+      await updateCourseEnrolledCount(enrollment.course_id);
+    }
+
+    if (enrollment.student && enrollment.course) {
+      await sendStatusEmail(
+        enrollment.student.email, 
+        enrollment.student.full_name, 
+        enrollment.course.title, 
+        newStatus
+      );
+    }
+
+    res.json({ message: action === "REMOVE" ? "Student removed." : "Decision recorded.", status: newStatus });
+  } catch (err) {
+    console.error("ADVISOR ACTION ERROR:", err);
+    res.status(500).json({ error: "Action failed." });
   }
 };

@@ -1,40 +1,14 @@
-const router = require("express").Router();
-const authSession = require("../middleware/authSession");
+const express = require('express');
+const router = express.Router();
+const advisorController = require('../controllers/advisorController');
 
-const {
-  approveByAdvisor,
-  getAdvisorCourses,
-  getPendingStudentsForCourse,
-  approveCourse,
-  getPendingCourses
-} = require("../controllers/advisorController");
+// Course Approval Routes
+router.get('/pending-courses', advisorController.getFloatedCourses); // Fetches Pending & Approved
+router.post('/approve-course', advisorController.approveCourse);
 
-/* ==================================
-   🔐 PROTECT ALL ADVISOR ROUTES
-================================== */
-router.use(authSession);
-
-/* ===============================
-   STUDENT ENROLLMENT APPROVAL
-================================ */
-
-// POST /api/advisor/approve-request
-router.post("/approve-request", approveByAdvisor);
-
-// GET /api/advisor/courses?advisor_id=
-router.get("/courses", getAdvisorCourses);
-
-// GET /api/advisor/pending-students?advisor_id=&course_id=
-router.get("/pending-students", getPendingStudentsForCourse);
-
-/* ===============================
-   COURSE APPROVAL
-================================ */
-
-// GET /api/advisor/pending-courses
-router.get("/pending-courses", getPendingCourses);
-
-// POST /api/advisor/approve-course
-router.post("/approve-course", approveCourse);
+// Student Approval Routes
+router.get('/student-courses', advisorController.getAdvisorStudentCourses); // The "Union" list
+router.get('/course-students', advisorController.getAdvisorStudentsForCourse); // Students for a card
+router.post('/approve-student', advisorController.approveByAdvisor); // Accept/Reject/Remove
 
 module.exports = router;
