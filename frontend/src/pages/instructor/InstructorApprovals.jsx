@@ -62,14 +62,13 @@ export default function InstructorApprovals() {
         prev.filter((a) => a.enrollment_id !== enrollmentId)
       );
       
-      // Update the count in the course list locally (optional UX improvement)
+      // OPTIONAL: Update local state to reflect count change instantly
       if (action === "REMOVE") {
          setCourses(prevCourses => prevCourses.map(c => 
             c.course_id === selectedCourse.course_id 
              ? { ...c, enrolled_count: Math.max(0, (c.enrolled_count || 0) - 1) } 
              : c
          ));
-         // Update selected course view too
          setSelectedCourse(prev => ({
              ...prev,
              enrolled_count: Math.max(0, (prev.enrolled_count || 0) - 1)

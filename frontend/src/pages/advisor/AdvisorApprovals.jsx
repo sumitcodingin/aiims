@@ -10,135 +10,160 @@ export default function AdvisorApprovals() {
   const [loading, setLoading] = useState(false);
 
   /* ================= FETCH COURSES ================= */
-  useEffect(() => {
-    api
-      .get("/advisor/courses", {
-        params: { advisor_id: user.id },
-      })
-      .then((res) => setCourses(res.data || []))
-      .catch(() => setCourses([]));
-  }, [user.id]);
-
-  /* ================= FETCH STUDENTS ================= */
-  const fetchStudents = async (course) => {
-    setSelectedCourse(course);
-    setLoading(true);
-
+  // Only courses with PENDING students for this advisor's department
+  const fetchCourses = async () => {
     try {
-      const res = await api.get("/advisor/pending-students", {
-        params: {
-          advisor_id: user.id,
-          course_id: course.course_id,
-        },
+      const res = await api.get("/advisor/courses", {
+        params: { advisor_id: user.id },
       });
-
-      setStudents(res.data || []);
+      setCourses(res.data || []);
     } catch (err) {
-      console.error("FETCH STUDENTS ERROR:", err);
-      setStudents([]);
-    } finally {
-      setLoading(false);
+      console.error("Failed to fetch courses:", err);
     }
   };
 
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  /* ================= FETCH STUDENTS FOR SELECTED COURSE ================= */
+  useEffect(() => {
+    if (!selectedCourse) return;
+
+    setLoading(true);
+    api
+      .get("/advisor/students", {
+        params: {
+          advisor_id: user.id,
+          course_id: selectedCourse.course_id,
+        },
+      })
+      .then((res) => setStudents(res.data || []))
+      .catch((err) => {
+        console.error("Failed to fetch students:", err);
+        setStudents([]);
+      })
+      .finally(() => setLoading(false));
+  }, [selectedCourse]);
+
   /* ================= APPROVE / REJECT ================= */
   const handleAction = async (enrollmentId, action) => {
-    await api.post("/advisor/approve-request", {
-      enrollmentId,
-      action,
-      advisor_id: user.id,
-    });
+    if (!window.confirm(`Are you sure you want to ${action} this student?`)) return;
 
-    setStudents((prev) =>
-      prev.filter((s) => s.enrollment_id !== enrollmentId)
-    );
+    try {
+      await api.post("/advisor/approve-student", {
+        enrollmentId,
+        action,
+        advisor_id: user.id,
+      });
+
+      // Remove the processed student from the list
+      setStudents((prev) => prev.filter((s) => s.enrollment_id !== enrollmentId));
+      
+      // Update seat count locally if Accepted
+      if (action === "ACCEPT") {
+        setCourses(prev => prev.map(c => 
+          c.course_id === selectedCourse.course_id 
+          ? { ...c, enrolled_count: (c.enrolled_count || 0) + 1 }
+          : c
+        ));
+      }
+
+      // If no students left, clear selected course and refresh list
+      if (students.length === 1) {
+        setSelectedCourse(null);
+        fetchCourses();
+      }
+    } catch (err) {
+      alert("Action failed.");
+    }
   };
 
   return (
-    <div className="max-w-6xl">
-      {/* ================= COURSE LIST ================= */}
+    <div className="max-w-5xl">
+      
       {!selectedCourse && (
         <>
-          <h2 className="text-2xl font-bold mb-6">Courses</h2>
-
+          <h2 className="text-2xl font-bold mb-6 text-gray-800">Pending Student Approvals</h2>
+          
           {courses.length === 0 ? (
-            <p className="text-gray-600">No courses assigned.</p>
+            <div className="bg-white p-8 rounded shadow text-center text-gray-500">
+              <p>No pending approvals found for your department.</p>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {courses.map((course) => (
-                <CourseCard
-                  key={course.course_id}
-                  course={course}
-                  onView={() => fetchStudents(course)}
-                />
+            <div className="grid md:grid-cols-2 gap-6">
+              {courses.map((c) => (
+                <div 
+                  key={c.course_id}
+                  className="bg-white p-6 shadow rounded-lg border hover:shadow-lg transition cursor-pointer"
+                  onClick={() => setSelectedCourse(c)}
+                >
+                  <h3 className="font-bold text-lg text-blue-900">{c.course_code}</h3>
+                  <p className="text-gray-700 font-medium mb-2">{c.title}</p>
+                  
+                  {/* 🚀 ADDED SESSION & DEPARTMENT */}
+                  <div className="text-sm text-gray-600 space-y-1">
+                     <p><span className="font-semibold">Department:</span> {c.department}</p>
+                     <p><span className="font-semibold">Session:</span> {c.acad_session}</p>
+                     <p><span className="font-semibold text-blue-700">Seats:</span> {c.enrolled_count || 0} / {c.capacity}</p>
+                  </div>
+
+                  <button className="mt-4 w-full bg-blue-50 text-blue-700 py-2 rounded text-sm font-semibold border border-blue-200 hover:bg-blue-100">
+                    Review Students
+                  </button>
+                </div>
               ))}
             </div>
           )}
         </>
       )}
 
-      {/* ================= STUDENT APPROVALS ================= */}
       {selectedCourse && (
         <>
-          <button
-            onClick={() => {
-              setSelectedCourse(null);
-              setStudents([]);
-            }}
-            className="text-blue-600 mb-4 hover:underline"
+          <button 
+            onClick={() => setSelectedCourse(null)}
+            className="text-blue-600 mb-4 hover:underline flex items-center gap-1"
           >
-            ← Back to My Courses
+            ← Back to Courses
           </button>
 
-          <div className="bg-white shadow rounded-xl p-6 mb-6">
-            <h3 className="text-xl font-bold">
-              {selectedCourse.course_code} — {selectedCourse.title}
-            </h3>
-            <p className="text-gray-600 text-sm mt-1">
-              {selectedCourse.department} • {selectedCourse.acad_session}
-            </p>
+          <div className="bg-white shadow rounded-lg p-6 mb-6">
+            <h3 className="text-xl font-bold">{selectedCourse.course_code} — {selectedCourse.title}</h3>
+            
+            {/* 🚀 ADDED DETAILS HERE TOO */}
+            <div className="text-sm text-gray-600 mt-2 space-y-1">
+              <p>Department: {selectedCourse.department}</p>
+              <p>Session: {selectedCourse.acad_session}</p>
+              <p className="font-semibold text-blue-700">
+                Enrollment: {selectedCourse.enrolled_count || 0} / {selectedCourse.capacity}
+              </p>
+            </div>
           </div>
 
           {loading ? (
-            <p className="text-gray-600">Loading enrollment requests...</p>
-          ) : students.length === 0 ? (
-            <p className="text-gray-600">
-              No pending students for this course.
-            </p>
+            <p className="text-gray-500">Loading students...</p>
           ) : (
             <div className="space-y-4">
               {students.map((s) => (
-                <div
-                  key={s.enrollment_id}
-                  className="bg-white shadow rounded-lg p-4 flex justify-between items-center"
-                >
+                <div key={s.enrollment_id} className="bg-white shadow p-4 rounded-lg flex justify-between items-center border-l-4 border-yellow-400">
                   <div>
-                    <p className="font-semibold">
-                      {s.student.full_name}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {s.student.email}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Dept: {s.student.department}
-                    </p>
+                    <p className="font-bold text-gray-800">{s.student?.full_name}</p>
+                    <p className="text-sm text-gray-600">{s.student?.email}</p>
+                    <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-xs font-bold rounded text-gray-600">
+                      {s.student?.department}
+                    </span>
                   </div>
-
+                  
                   <div className="flex gap-2">
                     <button
-                      onClick={() =>
-                        handleAction(s.enrollment_id, "ACCEPT")
-                      }
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded"
+                      onClick={() => handleAction(s.enrollment_id, "ACCEPT")}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-sm shadow transition"
                     >
-                      Accept
+                      Approve
                     </button>
-
                     <button
-                      onClick={() =>
-                        handleAction(s.enrollment_id, "REJECT")
-                      }
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded"
+                      onClick={() => handleAction(s.enrollment_id, "REJECT")}
+                      className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded text-sm shadow transition"
                     >
                       Reject
                     </button>
@@ -149,34 +174,6 @@ export default function AdvisorApprovals() {
           )}
         </>
       )}
-    </div>
-  );
-}
-
-/* ================= COURSE CARD ================= */
-
-function CourseCard({ course, onView }) {
-  return (
-    <div className="bg-white shadow rounded-xl p-6 flex flex-col justify-between">
-      <div>
-        <h3 className="text-lg font-bold">{course.course_code}</h3>
-        <p className="font-medium text-gray-700">
-          {course.title}
-        </p>
-
-        <div className="text-sm text-gray-600 mt-2 space-y-1">
-          <p>Department: {course.department}</p>
-          <p>Session: {course.acad_session}</p>
-          <p>Capacity: {course.capacity}</p>
-        </div>
-      </div>
-
-      <button
-        onClick={onView}
-        className="mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
-      >
-        View Enrollment Requests
-      </button>
     </div>
   );
 }
