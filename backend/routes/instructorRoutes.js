@@ -1,4 +1,6 @@
 const router = require("express").Router();
+const authSession = require("../middleware/authSession");
+
 const {
   getInstructorCourses,
   getCourseApplications,
@@ -7,6 +9,15 @@ const {
   floatCourse,
   getInstructorFeedback,
 } = require("../controllers/instructorController");
+
+/* ==================================
+   🔐 PROTECT ALL INSTRUCTOR ROUTES
+================================== */
+router.use(authSession);
+
+/* ==================================
+   INSTRUCTOR ROUTES
+================================== */
 
 router.get("/courses", getInstructorCourses);
 router.get("/applications", getCourseApplications);

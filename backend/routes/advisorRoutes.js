@@ -1,4 +1,5 @@
 const router = require("express").Router();
+const authSession = require("../middleware/authSession");
 
 const {
   approveByAdvisor,
@@ -7,6 +8,11 @@ const {
   approveCourse,
   getPendingCourses
 } = require("../controllers/advisorController");
+
+/* ==================================
+   🔐 PROTECT ALL ADVISOR ROUTES
+================================== */
+router.use(authSession);
 
 /* ===============================
    STUDENT ENROLLMENT APPROVAL
@@ -24,6 +30,8 @@ router.get("/pending-students", getPendingStudentsForCourse);
 /* ===============================
    COURSE APPROVAL
 ================================ */
+
+// GET /api/advisor/pending-courses
 router.get("/pending-courses", getPendingCourses);
 
 // POST /api/advisor/approve-course
