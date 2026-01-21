@@ -108,6 +108,62 @@ exports.verifyOTP = async (req, res) => {
 };
 
 /* =====================================================
+   HELPER: Find Advisor with Minimum Engagements
+===================================================== */
+
+/**
+ * Finds the advisor in the same department with the minimum number of
+ * current student/instructor engagements (load balancing).
+ * @param {string} department - Department of the new user
+ * @returns {Promise<number|null>} advisor_id or null if no advisor found
+ */
+const findLeastLoadedAdvisor = async (department) => {
+  try {
+    // 1. Get all advisors in the same department
+    const { data: advisors, error: advisorError } = await supabase
+      .from('users')
+      .select('user_id')
+      .eq('role', 'Advisor')
+      .eq('department', department);
+
+    if (advisorError || !advisors || advisors.length === 0) {
+      return null; // No advisors in this department
+    }
+
+    // 2. For each advisor, count their current engagements (students + instructors)
+    const advisorCounts = await Promise.all(
+      advisors.map(async (advisor) => {
+        const { count, error } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .eq('advisor_id', advisor.user_id)
+          .in('role', ['Student', 'Instructor']);
+
+        if (error) {
+          console.error(`Error counting engagements for advisor ${advisor.user_id}:`, error);
+          return { advisor_id: advisor.user_id, count: Infinity };
+        }
+
+        return {
+          advisor_id: advisor.user_id,
+          count: count || 0,
+        };
+      })
+    );
+
+    // 3. Find advisor with minimum count
+    const leastLoaded = advisorCounts.reduce((min, current) => {
+      return current.count < min.count ? current : min;
+    }, advisorCounts[0]);
+
+    return leastLoaded?.advisor_id || null;
+  } catch (err) {
+    console.error('FIND LEAST LOADED ADVISOR ERROR:', err);
+    return null; // Fail gracefully - user can be assigned advisor later
+  }
+};
+
+/* =====================================================
    SIGNUP FLOW (NEW USERS)
 ===================================================== */
 
@@ -181,16 +237,12 @@ exports.verifySignupOTP = async (req, res) => {
       return res.status(401).json({ error: "Invalid OTP." });
     }
 
+    // 🚀 AUTOMATIC ADVISOR ALLOCATION (Load Balancing)
+    // Assign advisor with minimum engagements to Student/Instructor roles
     let advisorId = null;
-    if (role === "Student") {
-      const { data: advisor } = await supabase
-        .from('users')
-        .select('user_id')
-        .eq('role', 'Advisor')
-        .eq('department', department)
-        .single();
-
-      if (advisor) advisorId = advisor.user_id;
+    if (role === "Student" || role === "Instructor") {
+      advisorId = await findLeastLoadedAdvisor(department);
+      // If no advisor found, advisorId remains null (can be assigned manually later by admin)
     }
 
     const { data: user, error } = await supabase
