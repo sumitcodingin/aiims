@@ -76,7 +76,7 @@ exports.approveByAdvisor = async (req, res) => {
 };
 
 /* ===================================================
-   2. Get COURSES (Advisor) - WITH SESSION & LIVE COUNTS
+   2. Get COURSES (Advisor) - FILTERED BY DEPT & LIVE COUNTS
 =================================================== */
 exports.getAdvisorCourses = async (req, res) => {
   const { advisor_id } = req.query;
@@ -91,7 +91,6 @@ exports.getAdvisorCourses = async (req, res) => {
     if (!advisor) return res.status(404).json({ error: "Advisor not found." });
 
     // A. Get pending enrollments
-    // 🚀 ADDED 'acad_session' HERE
     const { data } = await supabase
       .from("enrollments")
       .select(`
@@ -112,8 +111,15 @@ exports.getAdvisorCourses = async (req, res) => {
     // B. Filter courses relevant to advisor's department
     const uniqueCourses = {};
     (data || []).forEach((row) => {
-      // Logic: Advisor only sees courses where THEIR students are applying
-      if (row.student && row.student.department === advisor.department) {
+      // 🚀 UPDATED LOGIC:
+      // 1. Student must be from Advisor's department (Existing rule)
+      // 2. Course must ALSO be from Advisor's department (New rule)
+      if (
+        row.student && 
+        row.student.department === advisor.department &&
+        row.course &&
+        row.course.department === advisor.department // <--- Added Filter
+      ) {
         uniqueCourses[row.course.course_id] = row.course;
       }
     });
@@ -124,7 +130,7 @@ exports.getAdvisorCourses = async (req, res) => {
       return res.json([]);
     }
 
-    // C. 🚀 FETCH LIVE ENROLLED COUNTS
+    // C. FETCH LIVE ENROLLED COUNTS
     const courseIds = coursesList.map(c => c.course_id);
     const { data: enrollments, error: countError } = await supabase
       .from("enrollments")
