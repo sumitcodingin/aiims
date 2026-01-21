@@ -1,4 +1,6 @@
 const router = require('express').Router();
+const authSession = require('../middleware/authSession');
+
 const {
   applyForCourse,
   dropCourse,
@@ -7,6 +9,15 @@ const {
   getFeedbackOptions,
   submitInstructorFeedback,
 } = require('../controllers/studentController');
+
+/* ==================================
+   🔐 PROTECT ALL STUDENT ROUTES
+================================== */
+router.use(authSession);
+
+/* ==================================
+   STUDENT ROUTES
+================================== */
 
 router.post('/apply', applyForCourse);
 router.post('/drop', dropCourse);

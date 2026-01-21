@@ -14,7 +14,9 @@ export default function VerifyOtp() {
 
   const [timer, setTimer] = useState(30);
 
-  // Persist email so refresh doesn't break
+  /* ===============================
+     Persist email (refresh safe)
+  =============================== */
   useEffect(() => {
     if (emailFromState) {
       sessionStorage.setItem("otp_email", emailFromState);
@@ -26,6 +28,9 @@ export default function VerifyOtp() {
     }
   }, [emailFromState]);
 
+  /* ===============================
+     OTP resend timer
+  =============================== */
   useEffect(() => {
     let interval;
     if (timer > 0) {
@@ -34,7 +39,9 @@ export default function VerifyOtp() {
     return () => clearInterval(interval);
   }, [timer]);
 
-  // If email is missing completely
+  /* ===============================
+     If email missing completely
+  =============================== */
   if (!email) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -53,9 +60,9 @@ export default function VerifyOtp() {
     );
   }
 
-  // ============================
-  // VERIFY OTP HANDLER
-  // ============================
+  /* ============================
+     VERIFY OTP HANDLER (UPDATED)
+  ============================ */
   const verifyOtp = async () => {
     if (!otp) {
       alert("Please enter OTP");
@@ -70,11 +77,19 @@ export default function VerifyOtp() {
         otp,
       });
 
-      // Save logged-in user
-      sessionStorage.setItem("user", JSON.stringify(res.data.user));
+      const { sessionId, user } = res.data;
+
+      // ✅ STORE SESSION DATA
+      sessionStorage.setItem("sessionId", sessionId);
+      sessionStorage.setItem("userId", user.id);
+      sessionStorage.setItem("user", JSON.stringify(user));
       sessionStorage.removeItem("otp_email");
 
-      // Navigate to dashboard (ProtectedRoute will allow)
+      // ✅ ATTACH HEADERS FOR ALL FUTURE API CALLS
+      api.defaults.headers.common["x-session-id"] = sessionId;
+      api.defaults.headers.common["x-user-id"] = user.id;
+
+      // ✅ REDIRECT TO DASHBOARD
       navigate("/dashboard", { replace: true });
     } catch (err) {
       alert(
@@ -86,16 +101,22 @@ export default function VerifyOtp() {
     }
   };
 
+  /* ============================
+     RESEND OTP
+  ============================ */
   const resendOtp = async () => {
     try {
       await api.post("/auth/request-otp", { email });
-      setTimer(30); // Reset timer
+      setTimer(30);
       alert("New OTP sent to your email!");
     } catch (err) {
       alert("Failed to resend OTP");
     }
   };
 
+  /* ============================
+     UI
+  ============================ */
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-xl shadow-lg w-96">
@@ -130,7 +151,11 @@ export default function VerifyOtp() {
             <button
               onClick={resendOtp}
               disabled={timer > 0}
-              className={`font-semibold ${timer > 0 ? "text-gray-400" : "text-blue-600 hover:underline"}`}
+              className={`font-semibold ${
+                timer > 0
+                  ? "text-gray-400"
+                  : "text-blue-600 hover:underline"
+              }`}
             >
               {timer > 0 ? `Resend in ${timer}s` : "Resend OTP"}
             </button>

@@ -1,5 +1,6 @@
 const supabase = require('../supabaseClient');
 const { sendOTPEmail } = require('../utils/mailer');
+const crypto = require('crypto');
 
 /* =====================================================
    LOGIN FLOW (EXISTING USERS)
@@ -42,12 +43,12 @@ exports.requestOTP = async (req, res) => {
   }
 };
 
-// STEP 2: VERIFY OTP (LOGIN) - [UPDATED FOR ADMIN APPROVAL]
+// STEP 2: VERIFY OTP (LOGIN) — ✅ SINGLE SESSION ENFORCED
 exports.verifyOTP = async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-    // 1. Verify OTP match
+    // 1️⃣ Verify OTP
     const { data: record } = await supabase
       .from('otp_store')
       .select('*')
@@ -59,7 +60,7 @@ exports.verifyOTP = async (req, res) => {
       return res.status(401).json({ error: "Invalid OTP." });
     }
 
-    // 2. Get User
+    // 2️⃣ Fetch user
     const { data: user } = await supabase
       .from('users')
       .select('*')
@@ -70,7 +71,7 @@ exports.verifyOTP = async (req, res) => {
       return res.status(404).json({ error: "User not found." });
     }
 
-    // 🚀 NEW: CHECK STATUS (Admin Approval Logic)
+    // 3️⃣ Admin approval checks
     if (user.account_status === 'PENDING') {
       return res.status(403).json({ error: "Account awaiting admin approval." });
     }
@@ -78,11 +79,21 @@ exports.verifyOTP = async (req, res) => {
       return res.status(403).json({ error: "Account has been blocked by Admin." });
     }
 
-    // 3. Cleanup & Response
+    // 4️⃣ 🔐 Generate NEW session ID (invalidates previous login)
+    const sessionId = crypto.randomUUID();
+
+    await supabase
+      .from('users')
+      .update({ active_session_id: sessionId })
+      .eq('user_id', user.user_id);
+
+    // 5️⃣ Cleanup OTP
     await supabase.from('otp_store').delete().eq('email', email);
 
+    // 6️⃣ Send response
     res.json({
       message: "Login successful",
+      sessionId,
       user: {
         id: user.user_id,
         name: user.full_name,
@@ -105,10 +116,9 @@ exports.requestSignupOTP = async (req, res) => {
   const { email, full_name, role, department, batch, entry_no } = req.body;
 
   try {
-    // Validate email domain
     if (!email || !email.endsWith("@iitrpr.ac.in")) {
-      return res.status(400).json({ 
-        error: "Email must be from IIT Ropar domain (@iitrpr.ac.in)" 
+      return res.status(400).json({
+        error: "Email must be from IIT Ropar domain (@iitrpr.ac.in)"
       });
     }
 
@@ -127,18 +137,17 @@ exports.requestSignupOTP = async (req, res) => {
     }
 
     if (role === "Student") {
-      if(!department || !batch || !entry_no) {
-        return res.status(400).json({ error: "Department, Batch, and Entry Number are required." });
+      if (!department || !batch || !entry_no) {
+        return res.status(400).json({
+          error: "Department, Batch, and Entry Number are required."
+        });
       }
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     await supabase.from('otp_store').delete().eq('email', email);
-
-    await supabase.from('otp_store').insert([
-      { email, otp_code: otp }
-    ]);
+    await supabase.from('otp_store').insert([{ email, otp_code: otp }]);
 
     await sendOTPEmail(email, otp);
 
@@ -152,7 +161,7 @@ exports.requestSignupOTP = async (req, res) => {
   }
 };
 
-// STEP 2: VERIFY OTP & CREATE USER - [UPDATED FOR PENDING STATUS]
+// STEP 2: VERIFY OTP & CREATE USER
 exports.verifySignupOTP = async (req, res) => {
   const { email, otp, full_name, role, department, batch, entry_no } = req.body;
 
@@ -168,10 +177,11 @@ exports.verifySignupOTP = async (req, res) => {
       .eq('otp_code', otp)
       .single();
 
-    if (!record) return res.status(401).json({ error: "Invalid OTP." });
+    if (!record) {
+      return res.status(401).json({ error: "Invalid OTP." });
+    }
 
     let advisorId = null;
-    // Auto-assign advisor for Students (Optional logic)
     if (role === "Student") {
       const { data: advisor } = await supabase
         .from('users')
@@ -179,12 +189,11 @@ exports.verifySignupOTP = async (req, res) => {
         .eq('role', 'Advisor')
         .eq('department', department)
         .single();
-        
+
       if (advisor) advisorId = advisor.user_id;
     }
 
-    // 🚀 INSERT USER WITH 'PENDING' STATUS
-    const { data: user, error: insertError } = await supabase
+    const { data: user, error } = await supabase
       .from('users')
       .insert([
         {
@@ -193,13 +202,13 @@ exports.verifySignupOTP = async (req, res) => {
           role,
           department,
           advisor_id: advisorId,
-          account_status: 'PENDING' // <--- Set as Pending initially
+          account_status: 'PENDING'
         }
       ])
       .select()
       .single();
 
-    if (insertError) throw insertError;
+    if (error) throw error;
 
     if (role === "Student") {
       await supabase.from('student_profile').insert([{
@@ -213,7 +222,7 @@ exports.verifySignupOTP = async (req, res) => {
 
     res.json({
       message: "Signup successful! Please wait for Admin approval.",
-      user: null 
+      user: null
     });
   } catch (err) {
     console.error(err);
