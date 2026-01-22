@@ -1,186 +1,179 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
 
-// ===== UTILITY FUNCTION: Download Enrolled Students as CSV =====
+/* ================= CSV DOWNLOAD ================= */
+
 const downloadEnrolledStudentsCSV = async (course_id, course_code, instructor_id) => {
-  try {
-    console.log("Downloading CSV for course:", course_id, "instructor:", instructor_id);
-    
-    const response = await api.get(`/instructor/enrolled-students/${course_id}`, {
-      params: { instructor_id },
-    });
+  const res = await api.get(`/instructor/enrolled-students/${course_id}`, {
+    params: { instructor_id },
+  });
 
-    console.log("API Response:", response.data);
+  const students = res.data || [];
+  if (!students.length) return alert("No enrolled students");
 
-    const students = response.data;
+  const csv = [
+    "Student Name,Email",
+    ...students.map(s => `"${s.name}","${s.email}"`)
+  ].join("\n");
 
-    if (!students || students.length === 0) {
-      alert("No enrolled students to download.");
-      return;
-    }
-
-    // Create CSV content
-    const headers = ["Student Name", "Email"];
-    const rows = students.map((student) => [student.name, student.email]);
-
-    // Create CSV string
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
-    ].join("\n");
-
-    console.log("CSV Content:", csvContent);
-
-    // Create blob and download
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${course_code}_enrolled_students.csv`);
-    link.style.visibility = "hidden";
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    console.log("CSV downloaded successfully!");
-  } catch (err) {
-    console.error("Failed to download CSV - Full Error:", err);
-    console.error("Error Response:", err.response);
-    alert(`Failed to download enrolled students list.\n\nError: ${err.response?.data?.error || err.message}`);
-  }
+  const blob = new Blob([csv], { type: "text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${course_code}_students.csv`;
+  link.click();
 };
 
 export default function InstructorApprovals() {
   const user = JSON.parse(sessionStorage.getItem("user"));
 
   const [courses, setCourses] = useState([]);
-  const [search, setSearch] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState(null);
-
   const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [viewMode, setViewMode] = useState("PENDING");
+
+  /* ===== FILTER STATES ===== */
+  const [courseSearch, setCourseSearch] = useState("");
+  const [courseDept, setCourseDept] = useState("");
+
+  const [studentSearch, setStudentSearch] = useState("");
+  const [studentDept, setStudentDept] = useState("");
 
   /* ================= FETCH COURSES ================= */
+
   useEffect(() => {
-    if (!user?.id) return;
-    
     api
-      .get("/instructor/courses", {
-        params: { instructor_id: user.id },
-      })
-      .then((res) => setCourses(res.data || []))
-      .catch((err) => {
-        console.error("Failed to fetch courses:", err);
-        setCourses([]);
-      });
+      .get("/instructor/courses", { params: { instructor_id: user.id } })
+      .then(res => setCourses(res.data || []))
+      .catch(() => setCourses([]));
   }, [user.id]);
 
-  /* ================= FETCH APPLICATIONS & ENROLLED ================= */
+  /* ================= FETCH APPLICATIONS ================= */
+
   useEffect(() => {
     if (!selectedCourse) return;
 
-    setLoading(true);
     api
       .get("/instructor/applications", {
         params: { course_id: selectedCourse.course_id },
       })
-      .then((res) => setApplications(res.data || []))
-      .catch((err) => {
-        console.error("Failed to fetch applications:", err);
-        setApplications([]);
-      })
-      .finally(() => setLoading(false));
+      .then(res => setApplications(res.data || []))
+      .catch(() => setApplications([]));
   }, [selectedCourse]);
 
-  /* ================= ACTIONS: APPROVE / REJECT / REMOVE ================= */
+  /* ================= ACTION ================= */
+
   const handleAction = async (enrollmentId, action) => {
-    // Confirmation for Removal
-    if (action === "REMOVE" && !window.confirm("Are you sure you want to remove this student?")) {
-      return;
-    }
+    if (action === "REMOVE" && !window.confirm("Remove student?")) return;
 
-    try {
-      await api.post("/instructor/approve-request", {
-        enrollmentId,
-        action, // 'ACCEPT', 'REJECT', or 'REMOVE'
-        instructor_id: user.id,
-      });
+    await api.post("/instructor/approve-request", {
+      enrollmentId,
+      action,
+      instructor_id: user.id,
+    });
 
-      // Remove the processed student from the local list
-      setApplications((prev) =>
-        prev.filter((a) => a.enrollment_id !== enrollmentId)
-      );
-      
-      // OPTIONAL: Update local state to reflect count change instantly
-      if (action === "REMOVE") {
-         setCourses(prevCourses => prevCourses.map(c => 
-            c.course_id === selectedCourse.course_id 
-             ? { ...c, enrolled_count: Math.max(0, (c.enrolled_count || 0) - 1) } 
-             : c
-         ));
-         setSelectedCourse(prev => ({
-             ...prev,
-             enrolled_count: Math.max(0, (prev.enrolled_count || 0) - 1)
-         }));
-      }
-
-    } catch (err) {
-      alert("Failed to update student status.");
-    }
+    setApplications(prev =>
+      prev.filter(a => a.enrollment_id !== enrollmentId)
+    );
   };
 
-  /* ================= SEPARATE LISTS ================= */
-  const pendingStudents = applications.filter(
-    (a) => a.status === "PENDING_INSTRUCTOR_APPROVAL"
-  );
-  const enrolledStudents = applications.filter(
-    (a) => a.status === "ENROLLED"
-  );
+  /* ================= FILTERED COURSES ================= */
 
-  /* ================= FILTER COURSES ================= */
-  const filteredCourses = courses.filter(
-    (c) =>
-      c.course_code.toLowerCase().includes(search.toLowerCase()) ||
-      c.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCourses = courses.filter(c => {
+    const q = courseSearch.toLowerCase();
+    return (
+      (c.course_code.toLowerCase().includes(q) ||
+        c.title.toLowerCase().includes(q)) &&
+      (!courseDept || c.department === courseDept)
+    );
+  });
+
+  /* ================= FILTERED STUDENTS ================= */
+
+  const filteredStudents = applications
+    .filter(a =>
+      viewMode === "PENDING"
+        ? a.status === "PENDING_INSTRUCTOR_APPROVAL"
+        : a.status === "ENROLLED"
+    )
+    .filter(a => {
+      const q = studentSearch.toLowerCase();
+      const name = a.student?.full_name?.toLowerCase() || "";
+      const entry = a.student?.entry_no?.toLowerCase() || "";
+
+      return (
+        (!studentSearch || name.includes(q) || entry.includes(q)) &&
+        (!studentDept || a.student?.department === studentDept)
+      );
+    });
 
   /* ================= UI ================= */
+
   return (
     <div className="max-w-6xl">
-      {/* ================= COURSES VIEW ================= */}
+
+      {/* ================= COURSE LIST ================= */}
       {!selectedCourse && (
         <>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold">My Courses</h2>
+          <h2 className="text-xl font-bold mb-4">My Courses</h2>
 
+          <div className="grid md:grid-cols-3 gap-3 mb-4">
             <input
-              type="text"
-              placeholder="Search by course code or title"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="border rounded-lg px-4 py-2 w-72"
+              placeholder="Search course code / title"
+              className="border px-3 py-2 text-sm"
+              value={courseSearch}
+              onChange={(e) => setCourseSearch(e.target.value)}
             />
+
+            <select
+              className="border px-3 py-2 text-sm"
+              value={courseDept}
+              onChange={(e) => setCourseDept(e.target.value)}
+            >
+              <option value="">All Departments</option>
+              {[...new Set(courses.map(c => c.department))].map(d => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
           </div>
 
-          {filteredCourses.length === 0 ? (
-            <p className="text-gray-600">No courses found.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredCourses.map((course) => (
-                <CourseCard
-                  key={course.course_id}
-                  course={course}
-                  onView={() => setSelectedCourse(course)}
-                />
-              ))}
-            </div>
-          )}
+          <div className="bg-white border">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-3 py-2 text-left">Course</th>
+                  <th className="px-3 py-2">Department</th>
+                  <th className="px-3 py-2">Session</th>
+                  <th className="px-3 py-2">Seats</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCourses.map(c => (
+                  <tr key={c.course_id} className="border-t">
+                    <td className="px-3 py-2">
+                      <b>{c.course_code}</b>
+                      <div className="text-xs text-gray-600">{c.title}</div>
+                    </td>
+                    <td className="px-3 py-2">{c.department}</td>
+                    <td className="px-3 py-2">{c.acad_session}</td>
+                    <td className="px-3 py-2">{c.enrolled_count}/{c.capacity}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => setSelectedCourse(c)}
+                        className="border px-3 py-1 text-xs hover:bg-gray-100"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
-      {/* ================= COURSE DETAILS VIEW ================= */}
+      {/* ================= COURSE DETAILS ================= */}
       {selectedCourse && (
         <>
           <button
@@ -188,155 +181,135 @@ export default function InstructorApprovals() {
               setSelectedCourse(null);
               setApplications([]);
             }}
-            className="text-blue-600 mb-4 hover:underline"
+            className="text-blue-700 text-sm mb-4"
           >
             ← Back to My Courses
           </button>
 
-          <div className="bg-white shadow rounded-xl p-6 mb-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-xl font-bold">
-                  {selectedCourse.course_code} — {selectedCourse.title}
-                </h3>
-                <div className="text-sm text-gray-700 mt-2 space-y-1">
-                  <p><span className="font-semibold">Department:</span> {selectedCourse.department}</p>
-                  <p><span className="font-semibold">Session:</span> {selectedCourse.acad_session}</p>
-                  <p><span className="font-semibold text-blue-700">Seats:</span> {selectedCourse.enrolled_count || 0} / {selectedCourse.capacity}</p>
-                </div>
-              </div>
+          <div className="border bg-white p-4 mb-4">
+            <h3 className="text-lg font-bold">
+              {selectedCourse.course_code} — {selectedCourse.title}
+            </h3>
+            <p className="text-sm">Department: {selectedCourse.department}</p>
+            <p className="text-sm">Session: {selectedCourse.acad_session}</p>
+            <p className="text-sm">
+              Seats: {selectedCourse.enrolled_count}/{selectedCourse.capacity}
+            </p>
 
-              {/* Download CSV Button */}
-              {enrolledStudents.length > 0 && (
-                <button
-                  onClick={() =>
-                    downloadEnrolledStudentsCSV(
-                      selectedCourse.course_id,
-                      selectedCourse.course_code,
-                      user.id
-                    )
-                  }
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2"
-                >
-                   Download CSV
-                </button>
-              )}
-            </div>
+            <button
+              onClick={() =>
+                downloadEnrolledStudentsCSV(
+                  selectedCourse.course_id,
+                  selectedCourse.course_code,
+                  user.id
+                )
+              }
+              className="mt-2 border px-4 py-1 text-sm"
+            >
+              Download Enrolled Students (CSV)
+            </button>
           </div>
 
-          {loading ? (
-            <p className="text-gray-600">Loading students...</p>
-          ) : (
-            <div className="space-y-8">
-              
-              {/* === SECTION 1: PENDING APPLICATIONS === */}
-              <div>
-                <h4 className="text-lg font-bold mb-3 text-yellow-700 border-b pb-2">Pending Applications</h4>
-                {pendingStudents.length === 0 ? (
-                  <p className="text-gray-500 italic">No pending applications.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {pendingStudents.map((a) => (
-                      <StudentRow 
-                        key={a.enrollment_id} 
-                        application={a} 
-                        onAccept={() => handleAction(a.enrollment_id, "ACCEPT")}
-                        onReject={() => handleAction(a.enrollment_id, "REJECT")}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+          {/* ===== VIEW MODE + STUDENT FILTERS ===== */}
+          <div className="grid md:grid-cols-4 gap-3 mb-3">
+            <select
+              className="border px-3 py-2 text-sm"
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value)}
+            >
+              <option value="PENDING">Pending Applications</option>
+              <option value="ENROLLED">Enrolled Students</option>
+            </select>
 
-              {/* === SECTION 2: ENROLLED STUDENTS === */}
-              <div>
-                <h4 className="text-lg font-bold mb-3 text-green-700 border-b pb-2">Enrolled Students</h4>
-                {enrolledStudents.length === 0 ? (
-                  <p className="text-gray-500 italic">No enrolled students yet.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {enrolledStudents.map((a) => (
-                      <StudentRow 
-                        key={a.enrollment_id} 
-                        application={a}
-                        isEnrolled={true}
-                        onRemove={() => handleAction(a.enrollment_id, "REMOVE")}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+            <input
+              placeholder="Search student name / entry no"
+              className="border px-3 py-2 text-sm"
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+            />
 
-            </div>
-          )}
+            <select
+              className="border px-3 py-2 text-sm"
+              value={studentDept}
+              onChange={(e) => setStudentDept(e.target.value)}
+            >
+              <option value="">All Departments</option>
+              {[...new Set(applications.map(a => a.student?.department).filter(Boolean))].map(d => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* ===== STUDENT TABLE ===== */}
+          <StudentTable
+            students={filteredStudents}
+            viewMode={viewMode}
+            onAction={handleAction}
+          />
         </>
       )}
     </div>
   );
 }
 
-/* ================= HELPER COMPONENTS ================= */
+/* ================= STUDENT TABLE ================= */
 
-function StudentRow({ application, onAccept, onReject, onRemove, isEnrolled }) {
+function StudentTable({ students, viewMode, onAction }) {
+  if (!students.length)
+    return <p className="text-sm text-gray-500">No records found.</p>;
+
   return (
-    <div className="bg-white shadow rounded-lg p-4 flex justify-between items-center border-l-4 border-gray-200">
-      <div>
-        <p className="font-semibold text-gray-900">{application.student?.full_name}</p>
-        <p className="text-sm text-gray-600">{application.student?.email}</p>
-        <p className="text-xs text-gray-500 uppercase font-bold mt-1">
-          {application.student?.department}
-        </p>
-      </div>
-
-      <div className="flex gap-2">
-        {isEnrolled ? (
-          <button
-            onClick={onRemove}
-            className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 px-4 py-1.5 rounded text-sm font-semibold transition"
-          >
-            Remove Student
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={onAccept}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-sm font-semibold transition"
-            >
-              Accept
-            </button>
-            <button
-              onClick={onReject}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded text-sm font-semibold transition"
-            >
-              Reject
-            </button>
-          </>
-        )}
-      </div>
+    <div className="bg-white border">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="px-3 py-2 text-left">Student</th>
+            <th className="px-3 py-2">Department</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {students.map(a => (
+            <tr key={a.enrollment_id} className="border-t">
+              <td className="px-3 py-2">
+                <b>{a.student?.full_name}</b>
+                <div className="text-xs text-gray-600">
+                  {a.student?.entry_no || a.student?.email}
+                </div>
+              </td>
+              <td className="px-3 py-2">{a.student?.department}</td>
+              <td className="px-3 py-2 text-right space-x-2">
+                {viewMode === "PENDING" ? (
+                  <>
+                    <Btn green onClick={() => onAction(a.enrollment_id, "ACCEPT")}>Accept</Btn>
+                    <Btn red onClick={() => onAction(a.enrollment_id, "REJECT")}>Reject</Btn>
+                  </>
+                ) : (
+                  <Btn red outline onClick={() => onAction(a.enrollment_id, "REMOVE")}>
+                    Remove
+                  </Btn>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function CourseCard({ course, onView }) {
+/* ================= BUTTON ================= */
+
+function Btn({ children, onClick, green, red, outline }) {
+  let cls = "px-3 py-1 text-xs border rounded ";
+
+  if (green) cls += "bg-green-600 text-white border-green-600 hover:bg-green-700 ";
+  if (red && !outline) cls += "bg-red-600 text-white border-red-600 hover:bg-red-700 ";
+  if (outline && red) cls += "text-red-600 border-red-600 hover:bg-red-50 ";
+
   return (
-    <div className="bg-white shadow rounded-xl p-6 flex flex-col justify-between">
-      <div>
-        <h3 className="text-lg font-bold mb-1">{course.course_code}</h3>
-        <p className="text-gray-700 font-medium">{course.title}</p>
-
-        <div className="text-sm text-gray-600 mt-3 space-y-1">
-          <p><span className="font-semibold text-gray-800">Department:</span> {course.department}</p>
-          <p><span className="font-semibold text-gray-800">Session:</span> {course.acad_session}</p>
-          <p><span className="font-semibold text-blue-700">Seats:</span> {course.enrolled_count || 0} / {course.capacity}</p>
-        </div>
-      </div>
-
-      <button
-        onClick={onView}
-        className="mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition"
-      >
-        View Details
-      </button>
-    </div>
+    <button onClick={onClick} className={cls}>
+      {children}
+    </button>
   );
 }

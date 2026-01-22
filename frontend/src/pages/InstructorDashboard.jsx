@@ -2,9 +2,9 @@ import { useState } from "react";
 import InstructorApprovals from "./instructor/InstructorApprovals";
 import FloatCourse from "./instructor/FloatCourse";
 import InstructorFeedback from "./instructor/InstructorFeedback";
-import InstructorGrading from "./instructor/InstructorGrading";
-import AcademicEvents from "./student/AcademicEvents"; // ✅ reuse same component
-import AllCourses from "./instructor/AllCourses"; // <--- IMPORT ADDED
+import AcademicEvents from "./student/AcademicEvents";
+import AllCourses from "./instructor/AllCourses";
+import InstructorProfile from "./instructor/InstructorProfile"; // ✅ NEW IMPORT
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
@@ -18,9 +18,10 @@ export default function InstructorDashboard() {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* ================= SIDEBAR ================= */}
-      <nav className="fixed top-0 left-0 h-screen w-64 bg-blue-600 text-white flex flex-col justify-between shadow">
+      <nav className="fixed top-0 left-0 h-screen w-64 bg-neutral-900 text-neutral-200 shadow-lg flex flex-col justify-between">
+        {/* TOP */}
         <div>
-          <h1 className="text-2xl font-bold px-6 py-5 border-b border-blue-500">
+          <h1 className="text-lg font-semibold px-6 py-5 border-b border-neutral-700 tracking-wide">
             Instructor Portal
           </h1>
 
@@ -32,7 +33,6 @@ export default function InstructorDashboard() {
               My Courses
             </NavBtn>
 
-            {/* ✅ NEW: ALL COURSES TAB */}
             <NavBtn
               active={activeTab === "all-courses"}
               onClick={() => setActiveTab("all-courses")}
@@ -55,14 +55,6 @@ export default function InstructorDashboard() {
             </NavBtn>
 
             <NavBtn
-              active={activeTab === "grading"}
-              onClick={() => setActiveTab("grading")}
-            >
-              Award Grades
-            </NavBtn>
-
-            {/* ✅ Academic Events (Preserved) */}
-            <NavBtn
               active={activeTab === "academic-events"}
               onClick={() => setActiveTab("academic-events")}
             >
@@ -78,11 +70,15 @@ export default function InstructorDashboard() {
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-blue-500">
-          <p className="text-sm mb-3">{user?.name}</p>
+        {/* BOTTOM */}
+        <div className="px-6 py-4 border-t border-neutral-700">
+          <p className="text-sm text-neutral-400 mb-3">
+            {user?.name || "Instructor"}
+          </p>
+
           <button
             onClick={logout}
-            className="w-full bg-red-500 hover:bg-red-600 py-2 rounded text-sm"
+            className="w-full bg-neutral-700 hover:bg-neutral-600 px-3 py-2 rounded-md text-sm text-white transition"
           >
             Logout
           </button>
@@ -91,63 +87,20 @@ export default function InstructorDashboard() {
 
       {/* ================= MAIN CONTENT ================= */}
       <main className="ml-64 p-6 min-h-screen overflow-y-auto">
-        {/* MY COURSES */}
         {activeTab === "approvals" && <InstructorApprovals />}
 
-        {/* ✅ NEW: ALL COURSES SECTION */}
         {activeTab === "all-courses" && <AllCourses />}
 
-        {/* FLOAT COURSE */}
         {activeTab === "float" && (
           <FloatCourse onSuccess={() => setActiveTab("approvals")} />
         )}
 
-        {/* FEEDBACK */}
         {activeTab === "feedback" && <InstructorFeedback />}
 
-        {/* AWARD GRADES */}
-        {activeTab === "grading" && <InstructorGrading />}
-
-        {/* ACADEMIC EVENTS */}
         {activeTab === "academic-events" && <AcademicEvents />}
 
-        {/* PROFILE */}
-        {activeTab === "profile" && (
-          <div className="bg-gray-100">
-            <div className="bg-indigo-600 h-36 rounded-xl"></div>
-
-            <div className="bg-white rounded-xl shadow -mt-16 p-6 max-w-4xl mx-auto">
-              <div className="flex items-center gap-6">
-                <div className="h-24 w-24 rounded-full bg-indigo-600 text-white flex items-center justify-center text-3xl font-bold border-4 border-white">
-                  {user?.name?.[0] || "P"}
-                </div>
-
-                <div>
-                  <h2 className="text-2xl font-bold">{user?.name}</h2>
-                  <p className="text-gray-600">
-                    {user?.department || "Computer Science"} • Instructor
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                <ProfileCard title="Contact Info">
-                  <ProfileRow label="Email" value={user?.email} />
-                  <ProfileRow label="Department" value={user?.department} />
-                  <ProfileRow label="Room No" value="319" />
-                </ProfileCard>
-
-                <ProfileCard title="Details">
-                  <InputLike
-                    label="Research Interests"
-                    value="Computer Architecture"
-                  />
-                  <InputLike label="Experience" value="—" />
-                </ProfileCard>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* ✅ DOCUMENT-STYLE PROFILE */}
+        {activeTab === "profile" && <InstructorProfile />}
       </main>
     </div>
   );
@@ -159,42 +112,14 @@ function NavBtn({ active, children, ...props }) {
   return (
     <button
       {...props}
-      className={`text-left px-6 py-3 transition ${
-        active ? "bg-blue-500 font-medium" : "hover:bg-blue-500"
-      }`}
+      className={`text-left px-6 py-3 text-sm transition-colors
+        ${
+          active
+            ? "bg-neutral-800 text-white font-medium"
+            : "text-neutral-300 hover:bg-neutral-800"
+        }`}
     >
       {children}
     </button>
-  );
-}
-
-function ProfileCard({ title, children }) {
-  return (
-    <div className="bg-white rounded-xl shadow p-5">
-      <h3 className="font-semibold mb-4">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function ProfileRow({ label, value }) {
-  return (
-    <div className="flex justify-between mb-3">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium">{value || "—"}</span>
-    </div>
-  );
-}
-
-function InputLike({ label, value }) {
-  return (
-    <div className="mb-4">
-      <label className="text-sm text-gray-500 block mb-1">
-        {label}
-      </label>
-      <div className="border rounded px-3 py-2 bg-gray-50">
-        {value || "—"}
-      </div>
-    </div>
   );
 }

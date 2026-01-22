@@ -17,40 +17,37 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* ================= LEFT FIXED SIDEBAR ================= */}
-      <nav className="fixed top-0 left-0 h-screen w-64 bg-blue-600 text-white shadow flex flex-col justify-between">
-        {/* TOP */}
+      {/* ================= SIDEBAR ================= */}
+      <nav className="fixed top-0 left-0 h-screen w-64 bg-neutral-900 text-neutral-200 shadow-lg flex flex-col justify-between">
+        
+        {/* HEADER */}
         <div>
-          <h1 className="text-2xl font-bold px-6 py-5 border-b border-blue-500">
+          <h1 className="text-lg font-semibold px-6 py-5 border-b border-neutral-700 tracking-wide">
             Student Portal
           </h1>
 
+          {/* NAV ITEMS */}
           <div className="flex flex-col mt-4">
             <NavButton
               label="Courses"
               active={activeTab === "courses"}
               onClick={() => setActiveTab("courses")}
             />
-
             <NavButton
               label="Profile"
               active={activeTab === "profile"}
               onClick={() => setActiveTab("profile")}
             />
-
             <NavButton
               label="Records"
               active={activeTab === "records"}
               onClick={() => setActiveTab("records")}
             />
-
             <NavButton
               label="Feedback"
               active={activeTab === "feedback"}
               onClick={() => setActiveTab("feedback")}
             />
-
-            {/* ✅ Academic Events — SAME FLOW */}
             <NavButton
               label="Academic Events"
               active={activeTab === "academic-events"}
@@ -59,15 +56,15 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* BOTTOM */}
-        <div className="px-6 py-4 border-t border-blue-500">
-          <p className="text-sm opacity-90 mb-3">
+        {/* FOOTER */}
+        <div className="px-6 py-4 border-t border-neutral-700">
+          <p className="text-sm text-neutral-400 mb-3">
             {user?.name || "Student"}
           </p>
 
           <button
             onClick={logout}
-            className="w-full bg-red-500 hover:bg-red-600 px-3 py-2 rounded text-sm"
+            className="w-full bg-neutral-700 hover:bg-neutral-600 px-3 py-2 rounded-md text-sm text-white transition"
           >
             Logout
           </button>
@@ -87,17 +84,18 @@ export default function StudentDashboard() {
 }
 
 /* ---------------------------
-   Reusable Nav Button
+   NAV BUTTON
 ---------------------------- */
 function NavButton({ label, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`text-left px-6 py-3 transition ${
-        active
-          ? "bg-blue-500 font-medium"
-          : "opacity-90 hover:bg-blue-500 hover:opacity-100"
-      }`}
+      className={`text-left px-6 py-3 text-sm transition-colors
+        ${
+          active
+            ? "bg-neutral-800 text-white font-medium"
+            : "text-neutral-300 hover:bg-neutral-800"
+        }`}
     >
       {label}
     </button>

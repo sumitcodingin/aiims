@@ -11,61 +11,16 @@ const LIKERT5_OPTIONS = [
 ];
 
 const QUESTIONS = [
-  {
-    key: "q1",
-    label:
-      "Q1: Instructor informed the evaluation criteria within the first two weeks of the semester.",
-    type: "yesno",
-  },
-  {
-    key: "q2",
-    label:
-      "Q2: Number of Lectures taken by course instructor were Equal to (or More than) the total number of scheduled lectures.",
-    type: "yesno",
-  },
-  {
-    key: "q3",
-    label:
-      "Q3: The instructor adapted professional practices such as, covering the whole syllabus, lectures taken by him not by TAs, treating students equally, keeping methods of evaluation consistent and clear etc. in the class.",
-    type: "likert5",
-  },
-  {
-    key: "q4",
-    label:
-      "Q4: The instructor was sincere (timely returning the quizzes/ exam answer-scripts, etc).",
-    type: "likert5",
-  },
-  {
-    key: "q5",
-    label:
-      "Q5: The instructor had command over the subject and he/she came prepared (e.g. he/she could explain the concepts well, etc.).",
-    type: "likert5",
-  },
-  { key: "q6", label: "Q6: The objectives of the course were achieved.", type: "likert5" },
-  {
-    key: "q7",
-    label:
-      "Q7: Instructor was effective in delivery of lectures (Board work or Slides used for teaching was effective, clear and audible voice and English comprehension etc.)",
-    type: "likert5",
-  },
-  {
-    key: "q8",
-    label:
-      "Q8: Quality of questions raised in exams/assignments/classes by the instructor was adequate.",
-    type: "likert5",
-  },
-  {
-    key: "q9",
-    label:
-      "Q9: Instructor made efforts to encourage discussion and class participation in order to enhance students’ learning experience and progress.",
-    type: "likert5",
-  },
-  {
-    key: "q10",
-    label:
-      "Q10: Instructor could explain satisfactorily to the queries raised by the students.",
-    type: "likert5",
-  },
+  { key: "q1", label: "Q1: Instructor informed the evaluation criteria within the first two weeks of the semester.", type: "yesno" },
+  { key: "q2", label: "Q2: Number of lectures taken were equal to or more than scheduled.", type: "yesno" },
+  { key: "q3", label: "Q3: Instructor followed professional practices.", type: "likert5" },
+  { key: "q4", label: "Q4: Instructor was sincere in evaluation.", type: "likert5" },
+  { key: "q5", label: "Q5: Instructor had command over the subject.", type: "likert5" },
+  { key: "q6", label: "Q6: Course objectives were achieved.", type: "likert5" },
+  { key: "q7", label: "Q7: Instructor was effective in delivery.", type: "likert5" },
+  { key: "q8", label: "Q8: Quality of questions was adequate.", type: "likert5" },
+  { key: "q9", label: "Q9: Instructor encouraged discussion.", type: "likert5" },
+  { key: "q10", label: "Q10: Instructor answered queries satisfactorily.", type: "likert5" },
 ];
 
 const LIKERT_SCORE = {
@@ -113,17 +68,8 @@ export default function InstructorFeedback() {
 
   useEffect(() => {
     fetchRows();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, feedbackType, user.id]);
-
-  const summary = useMemo(() => {
-    const total = rows.length;
-    const byType = {};
-    rows.forEach((r) => {
-      byType[r.feedback_type] = (byType[r.feedback_type] || 0) + 1;
-    });
-    return { total, byType };
-  }, [rows]);
+    // eslint-disable-next-line
+  }, [courseId, feedbackType]);
 
   const analysis = useMemo(() => {
     const total = rows.length;
@@ -132,99 +78,67 @@ export default function InstructorFeedback() {
       const options = q.type === "yesno" ? YES_NO_OPTIONS : LIKERT5_OPTIONS;
       const counts = Object.fromEntries(options.map((o) => [o, 0]));
       let answered = 0;
-
       let scoreSum = 0;
       let scoreCount = 0;
 
       for (const r of rows) {
-        const raw = r?.[q.key];
-        if (!raw) continue;
-        const val = String(raw).trim();
+        const val = r?.[q.key];
         if (!val) continue;
-
         answered += 1;
         if (counts[val] !== undefined) counts[val] += 1;
-
-        if (q.type === "likert5" && LIKERT_SCORE[val] !== undefined) {
+        if (q.type === "likert5" && LIKERT_SCORE[val]) {
           scoreSum += LIKERT_SCORE[val];
           scoreCount += 1;
         }
       }
 
-      const avgScore =
-        q.type === "likert5" && scoreCount > 0 ? scoreSum / scoreCount : null;
-
       return {
         ...q,
-        total,
         answered,
+        total,
         counts,
         options,
-        avgScore,
+        avgScore: scoreCount ? scoreSum / scoreCount : null,
       };
     });
 
     const comments = rows
-      .map((r) => (r?.q11 ? String(r.q11).trim() : ""))
+      .map((r) => r?.q11?.trim())
       .filter(Boolean);
 
     return { total, byQuestion, comments };
   }, [rows]);
 
   return (
-    <div className="bg-white p-6 shadow rounded max-w-6xl">
-      <h2 className="text-2xl font-bold mb-4">Anonymous Feedback Responses</h2>
+    <div className="max-w-6xl mx-auto bg-white border border-gray-400 p-8">
+      <h2 className="text-xl font-bold mb-6">
+        Instructor Feedback Summary
+      </h2>
 
-      <div className="grid md:grid-cols-3 gap-4 mb-4">
-        <div>
-          <label className="block text-sm font-semibold mb-1">Course</label>
-          <select
-            className="border px-3 py-2 rounded w-full"
-            value={courseId}
-            onChange={(e) => setCourseId(e.target.value)}
-          >
-            <option value="">All</option>
-            {courses.map((c) => (
-              <option key={c.course_id} value={c.course_id}>
-                {c.course_code} - {c.title}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* FILTERS */}
+      <div className="grid md:grid-cols-3 gap-4 mb-6">
+        <Select label="Course" value={courseId} onChange={setCourseId}>
+          <option value="">All</option>
+          {courses.map((c) => (
+            <option key={c.course_id} value={c.course_id}>
+              {c.course_code} – {c.title}
+            </option>
+          ))}
+        </Select>
 
-        <div>
-          <label className="block text-sm font-semibold mb-1">Feedback type</label>
-          <select
-            className="border px-3 py-2 rounded w-full"
-            value={feedbackType}
-            onChange={(e) => setFeedbackType(e.target.value)}
-          >
-            <option value="">All</option>
-            <option value="Mid-sem">Mid-sem</option>
-          </select>
-        </div>
+        <Select label="Feedback Type" value={feedbackType} onChange={setFeedbackType}>
+          <option value="">All</option>
+          <option value="Mid-sem">Mid-sem</option>
+        </Select>
 
         <div className="flex items-end">
           <button
             onClick={fetchRows}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            className="bg-neutral-800 text-white px-6 py-2 text-sm"
           >
             Refresh
           </button>
         </div>
-      </div>
-
-      <div className="text-sm text-gray-700 mb-4">
-        <p className="font-semibold">Summary</p>
-        <p>Total responses: {summary.total}</p>
-        {Object.keys(summary.byType).length > 0 && (
-          <p>
-            By type:{" "}
-            {Object.entries(summary.byType)
-              .map(([k, v]) => `${k}: ${v}`)
-              .join(", ")}
-          </p>
-        )}
       </div>
 
       {loading ? (
@@ -232,139 +146,107 @@ export default function InstructorFeedback() {
       ) : rows.length === 0 ? (
         <p className="text-gray-600">No feedback found.</p>
       ) : (
-        <div className="space-y-6">
-          {/* ======= Analysis ======= */}
-          <div className="border rounded p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-semibold text-gray-900">Feedback analysis</p>
-                <p className="text-sm text-gray-600">
-                  Showing distribution for each question (counts + %).
-                </p>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={showRaw}
-                  onChange={(e) => setShowRaw(e.target.checked)}
-                />
-                Show raw responses
-              </label>
-            </div>
-
-            <div className="mt-4 space-y-5">
-              {analysis.byQuestion.map((q) => (
-                <div key={q.key} className="border rounded p-4 bg-gray-50">
-                  <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-                    <p className="font-semibold text-gray-900">{q.label}</p>
-                    <div className="text-xs text-gray-600">
-                      Answered: {q.answered}/{q.total}
-                      {q.avgScore !== null && (
-                        <span className="ml-3">
-                          Avg: {q.avgScore.toFixed(2)} / 5
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {q.options.map((opt) => {
-                      const count = q.counts[opt] || 0;
-                      const denom = q.answered || 0;
-                      const pct = denom > 0 ? Math.round((count / denom) * 100) : 0;
-                      return (
-                        <div key={opt} className="grid grid-cols-12 gap-3 items-center">
-                          <div className="col-span-12 md:col-span-4 text-sm text-gray-800">
-                            {opt}
-                          </div>
-                          <div className="col-span-12 md:col-span-6">
-                            <div className="w-full h-2 bg-gray-200 rounded">
-                              <div
-                                className="h-2 bg-blue-600 rounded"
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-span-12 md:col-span-2 text-xs text-gray-700">
-                            {count} ({pct}%)
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-
-              <div className="border rounded p-4 bg-gray-50">
-                <p className="font-semibold text-gray-900 mb-2">Q11 Comments</p>
-                {analysis.comments.length === 0 ? (
-                  <p className="text-sm text-gray-600">No comments submitted.</p>
-                ) : (
-                  <ul className="list-disc pl-5 space-y-2 text-sm text-gray-800">
-                    {analysis.comments.map((c, idx) => (
-                      <li key={idx} className="whitespace-pre-wrap">
-                        {c}
-                      </li>
-                    ))}
-                  </ul>
+        <>
+          {/* ANALYSIS */}
+          {analysis.byQuestion.map((q) => (
+            <div key={q.key} className="mb-6 border border-gray-300 p-4">
+              <div className="flex justify-between mb-2">
+                <p className="font-semibold">{q.label}</p>
+                {q.avgScore !== null && (
+                  <span className="text-sm text-gray-600">
+                    Avg: {q.avgScore.toFixed(2)} / 5
+                  </span>
                 )}
               </div>
+
+              <table className="w-full text-sm border border-gray-300">
+                <tbody>
+                  {q.options.map((opt) => (
+                    <tr key={opt} className="border-b last:border-b-0">
+                      <td className="px-3 py-2 bg-gray-100 w-1/2">
+                        {opt}
+                      </td>
+                      <td className="px-3 py-2">
+                        {q.counts[opt]} responses
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          ))}
+
+          {/* COMMENTS */}
+          <div className="border border-gray-300 p-4">
+            <h3 className="font-semibold mb-2">Student Comments</h3>
+            {analysis.comments.length === 0 ? (
+              <p className="text-sm text-gray-600">No comments submitted.</p>
+            ) : (
+              <ul className="list-disc pl-5 text-sm space-y-2">
+                {analysis.comments.map((c, i) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          {/* ======= Raw responses ======= */}
-          {showRaw && (
-            <div className="space-y-3">
-              {rows.map((r) => (
-                <div key={r.feedback_id} className="border rounded p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <div>
-                      <p className="font-semibold">
-                        {r.course?.title || "Course"}{" "}
-                        {r.course?.course_code ? `(${r.course.course_code})` : ""}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Type: {r.feedback_type} · Submitted:{" "}
-                        {r.created_at ? new Date(r.created_at).toLocaleString() : "—"}
-                      </p>
-                    </div>
-                  </div>
+          {/* RAW TOGGLE */}
+          <div className="mt-6">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showRaw}
+                onChange={(e) => setShowRaw(e.target.checked)}
+              />
+              Show raw responses
+            </label>
+          </div>
 
-                  <div className="grid md:grid-cols-2 gap-2 text-sm">
-                    <Answer label="Q1" value={r.q1} />
-                    <Answer label="Q2" value={r.q2} />
-                    <Answer label="Q3" value={r.q3} />
-                    <Answer label="Q4" value={r.q4} />
-                    <Answer label="Q5" value={r.q5} />
-                    <Answer label="Q6" value={r.q6} />
-                    <Answer label="Q7" value={r.q7} />
-                    <Answer label="Q8" value={r.q8} />
-                    <Answer label="Q9" value={r.q9} />
-                    <Answer label="Q10" value={r.q10} />
-                  </div>
+          {showRaw &&
+            rows.map((r) => (
+              <div key={r.feedback_id} className="border border-gray-300 p-4 mt-4">
+                <p className="font-semibold">
+                  {r.course?.course_code} – {r.course?.title}
+                </p>
+                <p className="text-xs text-gray-500 mb-2">
+                  {r.feedback_type} · {new Date(r.created_at).toLocaleString()}
+                </p>
 
-                  {r.q11 && (
-                    <div className="mt-3 text-sm">
-                      <p className="font-semibold">Q11 Comment</p>
-                      <p className="text-gray-700 whitespace-pre-wrap">{r.q11}</p>
+                <div className="grid md:grid-cols-2 gap-2 text-sm">
+                  {QUESTIONS.map((q) => (
+                    <div key={q.key}>
+                      <span className="font-semibold">{q.key.toUpperCase()}:</span>{" "}
+                      {r[q.key] || "—"}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+
+                {r.q11 && (
+                  <p className="mt-2 text-sm">
+                    <span className="font-semibold">Comment:</span> {r.q11}
+                  </p>
+                )}
+              </div>
+            ))}
+        </>
       )}
     </div>
   );
 }
 
-function Answer({ label, value }) {
+/* ================= HELPER ================= */
+
+function Select({ label, value, onChange, children }) {
   return (
-    <div className="flex gap-2">
-      <span className="font-semibold text-gray-700">{label}:</span>
-      <span className="text-gray-800">{value || "—"}</span>
+    <div>
+      <label className="block text-sm font-medium mb-1">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-400 px-3 py-2 text-sm bg-white"
+      >
+        {children}
+      </select>
     </div>
   );
 }
-
