@@ -10,6 +10,11 @@ const DEPARTMENTS = [
   "Artificial Intelligence",
 ];
 
+const SLOTS = [
+  "Pc-1", "Pc-2", "Pc-3", "Pc-4", "Pc-5",
+  "Pc-6", "Pc-7", "Pc-8", "Pc-9", "Pc-10"
+];
+
 export default function FloatCourse({ onSuccess }) {
   const user = JSON.parse(sessionStorage.getItem("user"));
 
@@ -20,6 +25,7 @@ export default function FloatCourse({ onSuccess }) {
     acad_session: "2025-II",
     credits: "",
     capacity: "",
+    slot: "", // Added slot to state
   });
 
   const [showConfirm, setShowConfirm] = useState(false);
@@ -32,7 +38,8 @@ export default function FloatCourse({ onSuccess }) {
       !form.title ||
       !form.department ||
       !form.credits ||
-      !form.capacity
+      !form.capacity ||
+      !form.slot // Validate slot
     ) {
       alert("Please fill all required fields.");
       return;
@@ -62,6 +69,7 @@ export default function FloatCourse({ onSuccess }) {
         acad_session: "2025-II",
         credits: "",
         capacity: "",
+        slot: "",
       });
 
       if (onSuccess) onSuccess();
@@ -109,6 +117,14 @@ export default function FloatCourse({ onSuccess }) {
             disabled
           />
 
+          {/* New Slot Dropdown */}
+          <Select
+            label="Course Slot"
+            value={form.slot}
+            onChange={(v) => setForm({ ...form, slot: v })}
+            options={SLOTS}
+          />
+
           <Input
             label="Credits"
             type="number"
@@ -151,6 +167,7 @@ export default function FloatCourse({ onSuccess }) {
                 <ConfirmRow label="Title" value={form.title} />
                 <ConfirmRow label="Department" value={form.department} />
                 <ConfirmRow label="Academic Session" value={form.acad_session} />
+                <ConfirmRow label="Slot" value={form.slot} />
                 <ConfirmRow label="Credits" value={form.credits} />
                 <ConfirmRow label="Capacity" value={form.capacity} />
               </tbody>
