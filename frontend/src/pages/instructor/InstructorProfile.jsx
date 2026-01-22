@@ -1,79 +1,93 @@
+import collegeLogo from "../../assets/images/iit_ropar_logo.jpg";
+
 export default function InstructorProfile() {
   const user = JSON.parse(sessionStorage.getItem("user"));
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header Section */}
-      <div className="bg-white shadow rounded-b-2xl overflow-hidden">
-        {/* Purple Banner */}
-        <div className="h-36 bg-indigo-600"></div>
+    <div className="max-w-6xl mx-auto bg-white p-10 border border-gray-400">
+      {/* ================= HEADER ================= */}
+      <div className="mb-14 text-center">
+        <img
+          src={collegeLogo}
+          alt="IIT Ropar Logo"
+          className="mx-auto mb-4 h-20 w-auto object-contain"
+        />
 
-        {/* Profile Content */}
-        <div className="relative px-8 pb-6">
-          {/* Avatar */}
-          <div className="absolute -top-12">
-            <div className="h-24 w-24 rounded-full bg-indigo-600 border-4 border-white flex items-center justify-center text-white text-3xl font-bold shadow-md">
-              {user?.name?.[0] || "P"}
-            </div>
-          </div>
+        <h1 className="text-2xl font-bold uppercase tracking-wide">
+          Indian Institute of Technology Ropar
+        </h1>
 
-          {/* Name & Role */}
-          <div className="pt-16">
-            <h1 className="text-2xl font-bold text-gray-900">
-              {user?.name || "—"}
-            </h1>
-            <p className="text-gray-600 mt-1">
-              {user?.department || "Computer Science"} • Instructor
-            </p>
-          </div>
-        </div>
+        <p className="mt-2 text-base text-gray-700">
+          Instructor Information Record
+        </p>
       </div>
 
-      {/* Info Cards */}
-      <div className="px-6 mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Contact Info */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Contact Info</h2>
+      {/* ================= INSTRUCTOR DETAILS ================= */}
+      <Section title="Instructor Details">
+        <Table>
+          <Row label="Full Name" value={user?.name || "—"} />
+          <Row label="Email Address" value={user?.email || "—"} />
+          <Row
+            label="Department"
+            value={user?.department || "Computer Science"}
+          />
+          <Row label="Role" value="Instructor" />
+          <Row
+            label="Account Created On"
+            value={
+              user?.createdAt
+                ? new Date(user.createdAt).toLocaleDateString()
+                : "—"
+            }
+          />
+        </Table>
+      </Section>
 
-          <InfoRow label="Email" value={user?.email} />
-          <InfoRow label="Department" value={user?.department || "Computer Science"} />
-          <InfoRow label="Account Created" value={user?.createdAt || "—"} />
-        </div>
+      {/* ================= PROFESSIONAL INFORMATION ================= */}
+      <Section title="Professional Information">
+        <Table>
+          <Row label="Research Interests" value={user?.research || "—"} />
+          <Row label="Experience" value={user?.experience || "—"} />
+          <Row label="Office / Room No" value={user?.roomNo || "—"} />
+        </Table>
+      </Section>
 
-        {/* Personal Details */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Personal Details</h2>
-
-          <InputLike label="Batch" value={user?.batch} />
-          <InputLike label="Entry Number" value={user?.entryNumber} />
-          <InputLike label="Advisor" value={user?.advisor || "Not Assigned"} />
-          <InputLike label="Advisor Email" value={user?.advisorEmail} />
-        </div>
+      {/* ================= FOOTER ================= */}
+      <div className="mt-16 text-xs text-gray-600 text-center">
+        This is a system-generated record from the Academic Management Portal.
       </div>
     </div>
   );
 }
 
-/* Reusable Components */
+/* ================= HELPER COMPONENTS ================= */
 
-function InfoRow({ label, value }) {
+function Section({ title, children }) {
   return (
-    <div className="flex justify-between items-center mb-3">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-gray-800">{value || "—"}</span>
+    <div className="mb-12">
+      <h2 className="text-sm font-bold uppercase border-b border-gray-500 pb-2 mb-5">
+        {title}
+      </h2>
+      {children}
     </div>
   );
 }
 
-function InputLike({ label, value }) {
+function Table({ children }) {
   return (
-    <div className="mb-4">
-      <label className="text-sm text-gray-500 block mb-1">
+    <table className="w-full border border-gray-400 text-sm">
+      <tbody>{children}</tbody>
+    </table>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <tr className="border-b border-gray-300 last:border-b-0">
+      <td className="w-1/3 px-4 py-4 font-medium bg-gray-100">
         {label}
-      </label>
-      <div className="border rounded-lg px-3 py-2 bg-gray-50 font-medium text-gray-800">
-        {value || "—"}
-      </div>
-    </div>
+      </td>
+      <td className="px-4 py-4">{value}</td>
+    </tr>
   );
 }

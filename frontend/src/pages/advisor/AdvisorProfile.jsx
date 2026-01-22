@@ -1,89 +1,95 @@
+import collegeLogo from "../../assets/images/iit_ropar_logo.jpg";
+
+
 export default function AdvisorProfile() {
   const user = JSON.parse(sessionStorage.getItem("user"));
 
   return (
-    <div className="bg-gray-100 min-h-screen p-6">
-      {/* Top Banner */}
-      <div className="bg-indigo-600 h-40 rounded-2xl"></div>
+    <div className="max-w-6xl mx-auto bg-white p-10 border border-gray-400">
+      {/* ================= HEADER ================= */}
+      <div className="mb-14 text-center">
+        <img
+          src={collegeLogo}
+          alt="IIT Ropar Logo"
+          className="mx-auto mb-4 h-20 w-auto object-contain"
+        />
 
-      {/* Profile Card */}
-      <div className="bg-white max-w-5xl mx-auto rounded-2xl shadow -mt-20 p-8">
-        {/* Header */}
-        <div className="flex items-center gap-6">
-          {/* Avatar */}
-          <div className="h-24 w-24 rounded-full bg-indigo-600 text-white flex items-center justify-center text-3xl font-bold border-4 border-white">
-            {user?.name?.[0] || "A"}
-          </div>
+        <h1 className="text-2xl font-bold uppercase tracking-wide">
+          Indian Institute of Technology Ropar
+        </h1>
 
-          {/* Name & Role */}
-          <div>
-            <h2 className="text-2xl font-bold">
-              {user?.name || "—"}
-            </h2>
-            <p className="text-gray-600 mt-1">
-              {user?.department || "Computer Science"} • Advisor
-            </p>
-          </div>
-        </div>
+        <p className="mt-2 text-base text-gray-700">
+          Advisor Information Record
+        </p>
+      </div>
 
-        {/* Info Sections */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-          {/* Contact Info */}
-          <ProfileCard title="Contact Info">
-            <ProfileRow label="Email" value={user?.email} />
-            <ProfileRow
-              label="Department"
-              value={user?.department || "Computer Science"}
-            />
-            <ProfileRow label="Room No" value={user?.roomNo || "—"} />
-          </ProfileCard>
+      {/* ================= ADVISOR DETAILS ================= */}
+      <Section title="Advisor Details">
+        <Table>
+          <Row label="Full Name" value={user?.name || "—"} />
+          <Row label="Email Address" value={user?.email || "—"} />
+          <Row
+            label="Department"
+            value={user?.department || "—"}
+          />
+          <Row label="Role" value="Advisor" />
+        </Table>
+      </Section>
 
-          {/* Details */}
-          <ProfileCard title="Details">
-            <InputLike
-              label="Research Interests"
-              value={user?.research || "—"}
-            />
-            <InputLike
-              label="Experience"
-              value={user?.experience || "—"}
-            />
-          </ProfileCard>
-        </div>
+      {/* ================= PROFESSIONAL DETAILS ================= */}
+      <Section title="Professional Information">
+        <Table>
+          <Row
+            label="Research Interests"
+            value={user?.research || "—"}
+          />
+          <Row
+            label="Experience"
+            value={user?.experience || "—"}
+          />
+          <Row
+            label="Room Number"
+            value={user?.roomNo || "—"}
+          />
+        </Table>
+      </Section>
+
+      {/* ================= FOOTER ================= */}
+      <div className="mt-16 text-xs text-gray-600 text-center">
+        This is a system-generated record from the Academic Management Portal.
       </div>
     </div>
   );
 }
 
-/* ================= HELPER COMPONENTS ================= */
+/* ================= HELPERS ================= */
 
-function ProfileCard({ title, children }) {
+function Section({ title, children }) {
   return (
-    <div className="bg-white rounded-xl shadow p-6">
-      <h3 className="text-lg font-semibold mb-4">{title}</h3>
+    <div className="mb-12">
+      <h2 className="text-sm font-bold uppercase border-b border-gray-500 pb-2 mb-5">
+        {title}
+      </h2>
       {children}
     </div>
   );
 }
 
-function ProfileRow({ label, value }) {
+function Table({ children }) {
   return (
-    <div className="flex justify-between mb-3">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium">{value || "—"}</span>
-    </div>
+    <table className="w-full border border-gray-400 text-sm">
+      <tbody>{children}</tbody>
+    </table>
   );
 }
 
-function InputLike({ label, value }) {
+function Row({ label, value }) {
   return (
-    <div className="mb-4">
-      <label className="text-sm text-gray-500 block mb-1">
+    <tr className="border-b border-gray-300 last:border-b-0">
+      <td className="w-1/3 px-4 py-4 font-medium bg-gray-100">
         {label}
-      </label>
-      <div className="border rounded-lg px-3 py-2 bg-gray-50">
-        {value || "—"}
-      </div>
-    </div>
+      </td>
+      <td className="px-4 py-4">{value}</td>
+    </tr>
   );
 }
