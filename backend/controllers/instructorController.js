@@ -190,14 +190,72 @@ const approveByInstructor = async (req, res) => {
 // 4. Award Grade
 // ===================================================
 const awardGrade = async (req, res) => {
-  const { enrollmentId, grade } = req.body;
-  try {
-    const { data: enrollment } = await supabase.from("enrollments").select("status").eq("enrollment_id", enrollmentId).single();
-    if (!enrollment || enrollment.status !== "ENROLLED") return res.status(400).json({ error: "Student must be enrolled." });
+  const { enrollmentId, grade, instructor_id } = req.body;
 
-    await supabase.from("enrollments").update({ grade }).eq("enrollment_id", enrollmentId);
-    res.status(200).json({ message: "Grade awarded." });
-  } catch (err) { res.status(500).json({ error: "Failed to award grade." }); }
+  console.log("Award Grade Request:", { enrollmentId, grade, instructor_id });
+
+  try {
+    if (!grade) {
+      return res.status(400).json({ error: "Grade is required." });
+    }
+
+    // 1. Fetch enrollment
+    const { data: enrollment, error: enrollError } = await supabase
+      .from("enrollments")
+      .select("enrollment_id, status, course_id")
+      .eq("enrollment_id", enrollmentId)
+      .single();
+
+    console.log("Enrollment Query Result:", { enrollment, enrollError });
+
+    if (enrollError || !enrollment) {
+      return res.status(404).json({ error: "Enrollment not found.", details: enrollError });
+    }
+
+    // 2. Fetch course to verify instructor ownership
+    const { data: course, error: courseError } = await supabase
+      .from("courses")
+      .select("course_id, faculty_id")
+      .eq("course_id", enrollment.course_id)
+      .single();
+
+    console.log("Course Query Result:", { course, courseError });
+
+    if (courseError || !course) {
+      return res.status(404).json({ error: "Course not found.", details: courseError });
+    }
+
+    console.log("Authorization Check:", {
+      course_faculty_id: course.faculty_id,
+      instructor_id: instructor_id,
+      match: String(course.faculty_id) === String(instructor_id),
+    });
+
+    // 3. Check if instructor owns this course
+    if (String(course.faculty_id) !== String(instructor_id)) {
+      return res.status(403).json({ error: "Unauthorized." });
+    }
+
+    // 4. Check if student is enrolled
+    if (enrollment.status !== "ENROLLED") {
+      return res.status(400).json({ error: "Student must be enrolled." });
+    }
+
+    // 5. Update grade
+    const { error: updateError } = await supabase
+      .from("enrollments")
+      .update({ grade })
+      .eq("enrollment_id", enrollmentId);
+
+    console.log("Grade Update Result:", { updateError });
+
+    if (updateError) throw updateError;
+
+    res.status(200).json({ message: "Grade awarded successfully." });
+  } catch (err) {
+    console.error("AWARD GRADE ERROR - Full Details:", err);
+    res.status(500).json({ error: "Failed to award grade.", details: err.message });
+  }
 };
 
 // ===================================================

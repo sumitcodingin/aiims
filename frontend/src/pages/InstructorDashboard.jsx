@@ -2,6 +2,7 @@ import { useState } from "react";
 import InstructorApprovals from "./instructor/InstructorApprovals";
 import FloatCourse from "./instructor/FloatCourse";
 import InstructorFeedback from "./instructor/InstructorFeedback";
+import InstructorGrading from "./instructor/InstructorGrading";
 import AcademicEvents from "./student/AcademicEvents"; // ✅ reuse same component
 import AllCourses from "./instructor/AllCourses"; // <--- IMPORT ADDED
 
@@ -53,6 +54,13 @@ export default function InstructorDashboard() {
               Feedback
             </NavBtn>
 
+            <NavBtn
+              active={activeTab === "grading"}
+              onClick={() => setActiveTab("grading")}
+            >
+              Award Grades
+            </NavBtn>
+
             {/* ✅ Academic Events (Preserved) */}
             <NavBtn
               active={activeTab === "academic-events"}
@@ -96,6 +104,9 @@ export default function InstructorDashboard() {
 
         {/* FEEDBACK */}
         {activeTab === "feedback" && <InstructorFeedback />}
+
+        {/* AWARD GRADES */}
+        {activeTab === "grading" && <InstructorGrading />}
 
         {/* ACADEMIC EVENTS */}
         {activeTab === "academic-events" && <AcademicEvents />}
