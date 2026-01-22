@@ -8,6 +8,7 @@ const {
   awardGrade,
   floatCourse,
   getInstructorFeedback,
+  getEnrolledStudentsForCourse,
 } = require("../controllers/instructorController");
 
 /* ==================================
@@ -22,6 +23,7 @@ router.use(authSession);
 router.get("/courses", getInstructorCourses);
 router.get("/applications", getCourseApplications);
 router.get("/feedback", getInstructorFeedback);
+router.get("/enrolled-students/:course_id", getEnrolledStudentsForCourse);
 router.post("/approve-request", approveByInstructor);
 router.post("/award-grade", awardGrade);
 router.post("/float-course", floatCourse);
