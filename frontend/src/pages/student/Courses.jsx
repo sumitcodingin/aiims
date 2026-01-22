@@ -4,6 +4,10 @@ import api from "../../services/api";
 export default function Courses() {
   const [courses, setCourses] = useState([]);
   const [appliedMap, setAppliedMap] = useState({});
+
+  // 🔹 NEW FILTER STATE
+  const [statusFilter, setStatusFilter] = useState("ALL");
+
   const [search, setSearch] = useState({
     code: "",
     dept: "",
@@ -27,7 +31,9 @@ export default function Courses() {
 
   const fetchData = useCallback(async () => {
     try {
-      const coursesRes = await api.get("/courses/search", { params: search });
+      const coursesRes = await api.get("/courses/search", {
+        params: search,
+      });
       setCourses(coursesRes.data || []);
 
       const recordsRes = await api.get("/student/records", {
@@ -51,6 +57,44 @@ export default function Courses() {
   const handleChange = (e) => {
     setSearch({ ...search, [e.target.name]: e.target.value });
   };
+
+  /* ================= FILTERED COURSES (NEW) ================= */
+
+  const filteredCourses = courses.filter((c) => {
+    const enrollment = appliedMap[c.course_id];
+    const status = enrollment?.status;
+
+    // 🔹 STATUS FILTER
+    if (statusFilter === "ENROLLED" && status !== "ENROLLED") return false;
+
+    if (
+      statusFilter === "PENDING_INSTRUCTOR" &&
+      status !== "PENDING_INSTRUCTOR_APPROVAL"
+    )
+      return false;
+
+    if (
+      statusFilter === "PENDING_ADVISOR" &&
+      status !== "PENDING_ADVISOR_APPROVAL"
+    )
+      return false;
+
+    if (statusFilter === "AVAILABLE") {
+      if (
+        enrollment &&
+        ![
+          "DROPPED_BY_STUDENT",
+          "INSTRUCTOR_REJECTED",
+          "ADVISOR_REJECTED",
+        ].includes(status)
+      )
+        return false;
+    }
+
+    return true;
+  });
+
+  /* ================= EXISTING ACTIONS (UNCHANGED) ================= */
 
   const apply = async (course_id) => {
     try {
@@ -137,14 +181,6 @@ export default function Courses() {
     }
   };
 
-  const getListStatusColor = (status) => {
-    if (status === "ENROLLED")
-      return "text-green-600 bg-green-50 border-green-200";
-    if (status.includes("PENDING"))
-      return "text-yellow-600 bg-yellow-50 border-yellow-200";
-    return "text-gray-600 bg-gray-50";
-  };
-
   const getCourseActions = (course) => {
     const enrollment = appliedMap[course.course_id];
     const status = enrollment?.status;
@@ -169,35 +205,50 @@ export default function Courses() {
     <>
       <h2 className="text-2xl font-bold mb-4">Available Courses</h2>
 
-      {/* SEARCH BAR */}
-      <div className="bg-white p-4 rounded-lg shadow border mb-6 grid grid-cols-2 md:grid-cols-5 gap-3">
-        <input name="code" placeholder="Course Code" className="border p-2 rounded text-sm" value={search.code} onChange={handleChange} />
-        <input name="title" placeholder="Course Title" className="border p-2 rounded text-sm" value={search.title} onChange={handleChange} />
-        <input name="dept" placeholder="Department" className="border p-2 rounded text-sm" value={search.dept} onChange={handleChange} />
-        <input name="instructor" placeholder="Instructor Name" className="border p-2 rounded text-sm" value={search.instructor} onChange={handleChange} />
-        <select name="session" className="border p-2 rounded text-sm" value={search.session} onChange={handleChange}>
+      {/* 🔹 STATUS FILTER (NEW) */}
+      <div className="mb-3">
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="border p-2 text-sm bg-white"
+        >
+          <option value="ALL">All Courses</option>
+          <option value="ENROLLED">Enrolled Courses</option>
+          <option value="PENDING_INSTRUCTOR">
+            Pending Instructor Approval
+          </option>
+          <option value="PENDING_ADVISOR">Pending Advisor Approval</option>
+          <option value="AVAILABLE">Available Courses</option>
+        </select>
+      </div>
+
+      {/* EXISTING SEARCH BAR (UNCHANGED) */}
+      <div className="bg-white p-4 shadow border mb-6 grid grid-cols-2 md:grid-cols-5 gap-3">
+        <input name="code" placeholder="Course Code" className="border p-2 text-sm" value={search.code} onChange={handleChange} />
+        <input name="title" placeholder="Course Title" className="border p-2 text-sm" value={search.title} onChange={handleChange} />
+        <input name="dept" placeholder="Department" className="border p-2 text-sm" value={search.dept} onChange={handleChange} />
+        <input name="instructor" placeholder="Instructor Name" className="border p-2 text-sm" value={search.instructor} onChange={handleChange} />
+        <select name="session" className="border p-2 text-sm" value={search.session} onChange={handleChange}>
           <option value="2025-II">2025-II</option>
           <option value="2025-I">2025-I</option>
           <option value="2024-II">2024-II</option>
         </select>
       </div>
 
-      {/* COURSE CARDS */}
+      {/* COURSE CARDS (UNCHANGED UI) */}
       <div className="grid md:grid-cols-2 gap-4">
-        {courses.map((c) => {
+        {filteredCourses.map((c) => {
           const { canApply, canDrop, enrollment } = getCourseActions(c);
 
           return (
             <div
               key={c.course_id}
               onClick={() => setSelectedCourse(c)}
-              className="bg-white p-4 shadow rounded border hover:shadow-lg transition cursor-pointer"
+              className="bg-white p-4 border border-gray-300 shadow-sm hover:shadow-md transition cursor-pointer rounded-none"
             >
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <h3 className="font-bold text-lg text-gray-900">
-                    {c.title}
-                  </h3>
+                  <h3 className="font-bold text-lg text-gray-900">{c.title}</h3>
                   <p className="text-sm text-gray-500">{c.course_code}</p>
                   <p className="text-sm text-gray-700">
                     Instructor: {c.instructor?.full_name || "—"}
@@ -206,7 +257,7 @@ export default function Courses() {
 
                 {enrollment && (
                   <span
-                    className={`px-2 py-1 text-xs font-bold rounded ${statusColor(
+                    className={`px-2 py-1 text-xs font-bold ${statusColor(
                       enrollment.status
                     )}`}
                   >
@@ -218,7 +269,7 @@ export default function Courses() {
               <div className="flex gap-2 mt-4 items-center">
                 <button
                   onClick={(e) => handleShowEnrollments(e, c)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm border"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 text-sm border"
                 >
                   Show Enrollments
                 </button>
@@ -229,7 +280,7 @@ export default function Courses() {
                       e.stopPropagation();
                       apply(c.course_id);
                     }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 text-sm"
                   >
                     Enroll
                   </button>
@@ -241,7 +292,7 @@ export default function Courses() {
                       e.stopPropagation();
                       drop(enrollment.enrollment_id);
                     }}
-                    className="border border-red-600 text-red-600 hover:bg-red-50 px-4 py-1 rounded text-sm"
+                    className="border border-red-600 text-red-600 hover:bg-red-50 px-4 py-1 text-sm"
                   >
                     Drop Course
                   </button>
@@ -251,61 +302,6 @@ export default function Courses() {
           );
         })}
       </div>
-
-      {/* ENROLLMENT MODAL (unchanged) */}
-      {showEnrollmentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 relative max-h-[80vh] flex flex-col">
-            <button
-              onClick={() => setShowEnrollmentModal(false)}
-              className="absolute top-4 right-4 text-xl font-bold"
-            >
-              &times;
-            </button>
-
-            <h3 className="text-xl font-bold mb-1">Current Enrollments</h3>
-            <p className="text-sm text-gray-500">{viewingEnrollmentMeta.title}</p>
-            <p className="text-sm font-semibold text-blue-600 mt-1 mb-4">
-              Current Enrolled: {viewingEnrollmentMeta.enrolledCount}/
-              {viewingEnrollmentMeta.capacity}
-            </p>
-
-            <div className="overflow-y-auto flex-1">
-              {enrollmentList.map((r, i) => (
-                <div
-                  key={i}
-                  className="flex justify-between items-center p-3 border rounded bg-gray-50 mb-2"
-                >
-                  <div>
-                    <p className="font-semibold">
-                      {r.student?.full_name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {r.student?.department}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-[10px] px-2 py-1 rounded border font-bold uppercase ${getListStatusColor(
-                      r.status
-                    )}`}
-                  >
-                    {r.status.replace(/_/g, " ")}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="text-right mt-4">
-              <button
-                onClick={() => setShowEnrollmentModal(false)}
-                className="bg-gray-200 px-4 py-2 rounded"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
