@@ -276,11 +276,64 @@ const getInstructorFeedback = async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to fetch feedback." }); }
 };
 
+// ===================================================
+// 7. Get Enrolled Students for CSV Download
+// ===================================================
+const getEnrolledStudentsForCourse = async (req, res) => {
+  const { course_id } = req.params;
+  const { instructor_id } = req.query;
+
+  try {
+    // 1. Verify instructor owns this course
+    const { data: course, error: courseError } = await supabase
+      .from("courses")
+      .select("faculty_id")
+      .eq("course_id", course_id)
+      .single();
+
+    if (courseError || !course) {
+      return res.status(404).json({ error: "Course not found." });
+    }
+
+    // Convert both to strings for comparison (type safety)
+    if (String(course.faculty_id) !== String(instructor_id)) {
+      return res.status(403).json({ error: "Unauthorized." });
+    }
+
+    // 2. Fetch enrolled students with their name and email
+    const { data: enrollments, error } = await supabase
+      .from("enrollments")
+      .select(`
+        student_id,
+        users!inner (
+          full_name,
+          email
+        )
+      `)
+      .eq("course_id", course_id)
+      .eq("status", "ENROLLED");
+
+    if (error) throw error;
+
+    // 3. Format data for CSV: extract names and emails
+    const students = enrollments.map((enrollment) => ({
+      name: enrollment.users?.full_name || "N/A",
+      email: enrollment.users?.email || "N/A",
+    }));
+
+    res.status(200).json(students);
+  } catch (err) {
+    console.error("GET ENROLLED STUDENTS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch enrolled students." });
+  }
+};
+
 module.exports = { 
   getInstructorCourses, 
   getCourseApplications, 
   approveByInstructor, 
   awardGrade, 
   floatCourse, 
-  getInstructorFeedback 
+  getInstructorFeedback,
+  getEnrolledStudentsForCourse
 };

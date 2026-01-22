@@ -1,6 +1,57 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
 
+// ===== UTILITY FUNCTION: Download Enrolled Students as CSV =====
+const downloadEnrolledStudentsCSV = async (course_id, course_code, instructor_id) => {
+  try {
+    console.log("Downloading CSV for course:", course_id, "instructor:", instructor_id);
+    
+    const response = await api.get(`/instructor/enrolled-students/${course_id}`, {
+      params: { instructor_id },
+    });
+
+    console.log("API Response:", response.data);
+
+    const students = response.data;
+
+    if (!students || students.length === 0) {
+      alert("No enrolled students to download.");
+      return;
+    }
+
+    // Create CSV content
+    const headers = ["Student Name", "Email"];
+    const rows = students.map((student) => [student.name, student.email]);
+
+    // Create CSV string
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+
+    console.log("CSV Content:", csvContent);
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${course_code}_enrolled_students.csv`);
+    link.style.visibility = "hidden";
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log("CSV downloaded successfully!");
+  } catch (err) {
+    console.error("Failed to download CSV - Full Error:", err);
+    console.error("Error Response:", err.response);
+    alert(`Failed to download enrolled students list.\n\nError: ${err.response?.data?.error || err.message}`);
+  }
+};
+
 export default function InstructorApprovals() {
   const user = JSON.parse(sessionStorage.getItem("user"));
 
@@ -143,13 +194,33 @@ export default function InstructorApprovals() {
           </button>
 
           <div className="bg-white shadow rounded-xl p-6 mb-6">
-            <h3 className="text-xl font-bold">
-              {selectedCourse.course_code} — {selectedCourse.title}
-            </h3>
-            <div className="text-sm text-gray-700 mt-2 space-y-1">
-              <p><span className="font-semibold">Department:</span> {selectedCourse.department}</p>
-              <p><span className="font-semibold">Session:</span> {selectedCourse.acad_session}</p>
-              <p><span className="font-semibold text-blue-700">Seats:</span> {selectedCourse.enrolled_count || 0} / {selectedCourse.capacity}</p>
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-bold">
+                  {selectedCourse.course_code} — {selectedCourse.title}
+                </h3>
+                <div className="text-sm text-gray-700 mt-2 space-y-1">
+                  <p><span className="font-semibold">Department:</span> {selectedCourse.department}</p>
+                  <p><span className="font-semibold">Session:</span> {selectedCourse.acad_session}</p>
+                  <p><span className="font-semibold text-blue-700">Seats:</span> {selectedCourse.enrolled_count || 0} / {selectedCourse.capacity}</p>
+                </div>
+              </div>
+
+              {/* Download CSV Button */}
+              {enrolledStudents.length > 0 && (
+                <button
+                  onClick={() =>
+                    downloadEnrolledStudentsCSV(
+                      selectedCourse.course_id,
+                      selectedCourse.course_code,
+                      user.id
+                    )
+                  }
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2"
+                >
+                   Download CSV
+                </button>
+              )}
             </div>
           </div>
 
