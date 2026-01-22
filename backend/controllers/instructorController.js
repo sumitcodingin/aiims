@@ -41,7 +41,8 @@ const getInstructorCourses = async (req, res) => {
         status,
         credits,
         department,
-        capacity
+        capacity,
+        slot
       `)
       .eq("faculty_id", instructor_id);
 
@@ -207,8 +208,6 @@ const awardGrade = async (req, res) => {
       .eq("enrollment_id", enrollmentId)
       .single();
 
-    console.log("Enrollment Query Result:", { enrollment, enrollError });
-
     if (enrollError || !enrollment) {
       return res.status(404).json({ error: "Enrollment not found.", details: enrollError });
     }
@@ -220,17 +219,9 @@ const awardGrade = async (req, res) => {
       .eq("course_id", enrollment.course_id)
       .single();
 
-    console.log("Course Query Result:", { course, courseError });
-
     if (courseError || !course) {
       return res.status(404).json({ error: "Course not found.", details: courseError });
     }
-
-    console.log("Authorization Check:", {
-      course_faculty_id: course.faculty_id,
-      instructor_id: instructor_id,
-      match: String(course.faculty_id) === String(instructor_id),
-    });
 
     // 3. Check if instructor owns this course
     if (String(course.faculty_id) !== String(instructor_id)) {
@@ -248,8 +239,6 @@ const awardGrade = async (req, res) => {
       .update({ grade })
       .eq("enrollment_id", enrollmentId);
 
-    console.log("Grade Update Result:", { updateError });
-
     if (updateError) throw updateError;
 
     res.status(200).json({ message: "Grade awarded successfully." });
@@ -260,7 +249,7 @@ const awardGrade = async (req, res) => {
 };
 
 // ===================================================
-// 5. Float a Course (UPDATED FOR SPECIFIC ADVISOR)
+// 5. Float a Course (UPDATED WITH SLOT LOGIC)
 // ===================================================
 const floatCourse = async (req, res) => {
   const {
@@ -270,12 +259,31 @@ const floatCourse = async (req, res) => {
     acad_session,
     credits,
     capacity,
-    // advisor_id,  <-- REMOVED: We don't trust frontend for this anymore
+    slot, // Added slot
     instructor_id,
   } = req.body;
 
   try {
-    // 1. 🚀 Fetch the specific Advisor assigned to this Instructor
+    if (!slot) {
+      return res.status(400).json({ error: "Course slot is required." });
+    }
+
+    // 1. 🚀 EDGE CASE 1: Check if Instructor already has a course in this slot
+    // We check for the same instructor, same session, and same slot.
+    const { data: existingSlotCourses, error: slotError } = await supabase
+      .from("courses")
+      .select("course_id")
+      .eq("faculty_id", instructor_id)
+      .eq("acad_session", acad_session)
+      .eq("slot", slot);
+
+    if (slotError) throw slotError;
+
+    if (existingSlotCourses && existingSlotCourses.length > 0) {
+      return res.status(400).json({ error: "You already have a course in this slot" });
+    }
+
+    // 2. Fetch the specific Advisor assigned to this Instructor
     const { data: instructorUser, error: userError } = await supabase
       .from("users")
       .select("advisor_id")
@@ -292,7 +300,7 @@ const floatCourse = async (req, res) => {
       });
     }
 
-    // 2. Insert Course assigned SPECIFICALLY to that advisor
+    // 3. Insert Course with Slot
     const { error } = await supabase.from("courses").insert([
       {
         course_code,
@@ -301,8 +309,9 @@ const floatCourse = async (req, res) => {
         acad_session,
         credits,
         capacity,
+        slot, // Insert the slot
         faculty_id: instructor_id,
-        advisor_id: instructorUser.advisor_id, // <--- 🚀 ASSIGNING SPECIFIC ADVISOR
+        advisor_id: instructorUser.advisor_id,
         status: "PENDING_ADVISOR_APPROVAL",
         enrolled_count: 0,
       },
@@ -315,7 +324,7 @@ const floatCourse = async (req, res) => {
     });
   } catch (err) {
     console.error("FLOAT COURSE ERROR:", err);
-    res.status(500).json({ error: "Failed to float course." });
+    res.status(500).json({ error: err.message || "Failed to float course." });
   }
 };
 

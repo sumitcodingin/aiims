@@ -29,21 +29,74 @@ const updateCourseEnrolledCount = async (course_id) => {
 exports.applyForCourse = async (req, res) => {
   const { student_id, course_id } = req.body;
   try {
-    // Fetch details for email
-    const { data: student } = await supabase.from('users').select('full_name, email').eq('user_id', student_id).single();
-    const { data: course } = await supabase.from('courses').select('title').eq('course_id', course_id).single();
+    // 1. Fetch details of the course to be applied for (including SLOT and SESSION)
+    const { data: course, error: courseError } = await supabase
+      .from('courses')
+      .select('title, slot, acad_session')
+      .eq('course_id', course_id)
+      .single();
 
-    // Check existing
-    const { data: existing } = await supabase.from('enrollments').select('enrollment_id, status').eq('student_id', student_id).eq('course_id', course_id).maybeSingle();
+    if (courseError || !course) {
+        return res.status(404).json({ error: "Course not found." });
+    }
+
+    const { data: student } = await supabase.from('users').select('full_name, email').eq('user_id', student_id).single();
+
+    // 2. Check existing application for THIS course
+    const { data: existing } = await supabase
+        .from('enrollments')
+        .select('enrollment_id, status')
+        .eq('student_id', student_id)
+        .eq('course_id', course_id)
+        .maybeSingle();
 
     if (existing) {
       if (['DROPPED_BY_STUDENT', 'INSTRUCTOR_REJECTED', 'ADVISOR_REJECTED'].includes(existing.status)) {
-        await supabase.from('enrollments').update({ status: 'PENDING_INSTRUCTOR_APPROVAL', grade: null }).eq('enrollment_id', existing.enrollment_id);
-        if (student && course) await sendStatusEmail(student.email, student.full_name, course.title, 'PENDING_INSTRUCTOR_APPROVAL');
-        return res.json({ message: 'Re-application submitted.' });
+        // Re-applying is fine, BUT we still need to check slot collision below
       } else {
         return res.status(400).json({ error: 'Active application exists.' });
       }
+    }
+
+    // 3. 🚀 EDGE CASE 2: Check for Slot Collision with other ENROLLED courses in the same session
+    // We need to fetch all enrollments for this student where status is 'ENROLLED'
+    // and the linked course has the same session and same slot.
+    
+    // Fetch all enrolled courses for this student
+    const { data: enrolledCourses, error: enrolledError } = await supabase
+        .from('enrollments')
+        .select(`
+            status,
+            courses!inner (
+                course_id,
+                slot,
+                acad_session
+            )
+        `)
+        .eq('student_id', student_id)
+        .eq('status', 'ENROLLED');
+
+    if (enrolledError) throw enrolledError;
+
+    if (enrolledCourses && enrolledCourses.length > 0) {
+        for (const record of enrolledCourses) {
+            // Check if sessions match (usually we only care about collision in the current session)
+            if (record.courses.acad_session === course.acad_session) {
+                if (record.courses.slot === course.slot) {
+                    return res.status(400).json({ 
+                        error: `You have already enrolled course which is on slot ${course.slot}. Please drop that course before applying` 
+                    });
+                }
+            }
+        }
+    }
+    // -------------------------------------------------------------
+
+    // 4. Proceed with Insert / Update
+    if (existing && ['DROPPED_BY_STUDENT', 'INSTRUCTOR_REJECTED', 'ADVISOR_REJECTED'].includes(existing.status)) {
+        await supabase.from('enrollments').update({ status: 'PENDING_INSTRUCTOR_APPROVAL', grade: null }).eq('enrollment_id', existing.enrollment_id);
+        if (student && course) await sendStatusEmail(student.email, student.full_name, course.title, 'PENDING_INSTRUCTOR_APPROVAL');
+        return res.json({ message: 'Re-application submitted.' });
     }
 
     await supabase.from('enrollments').insert([{ student_id, course_id, status: 'PENDING_INSTRUCTOR_APPROVAL' }]);
@@ -52,7 +105,7 @@ exports.applyForCourse = async (req, res) => {
     res.status(201).json({ message: 'Application submitted.' });
   } catch (err) {
     console.error('APPLY ERROR:', err);
-    res.status(500).json({ error: 'Failed to apply.' });
+    res.status(500).json({ error: err.message || 'Failed to apply.' });
   }
 };
 
