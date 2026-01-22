@@ -102,7 +102,7 @@ export default function InstructorGrading() {
 
     if (
       !window.confirm(
-        `Are you sure you want to award grades to ${enrolledStudents.length} students?`
+        `Confirm: Award grades to ${enrolledStudents.length} students?`
       )
     ) {
       return;
@@ -121,12 +121,17 @@ export default function InstructorGrading() {
 
       await Promise.all(gradeRequests);
 
-      alert(" Grades awarded successfully!");
+      // Update the enrolledStudents with the new grades
+      const updatedStudents = enrolledStudents.map((student) => ({
+        ...student,
+        grade: grades[student.enrollment_id],
+      }));
+      setEnrolledStudents(updatedStudents);
 
-      // Reset
-      setSelectedCourse(null);
-      setEnrolledStudents([]);
+      // Clear the "New Grade" dropdowns
       setGrades({});
+
+      alert("✅ Grades awarded successfully!");
     } catch (err) {
       console.error("Failed to award grades:", err);
       alert("Failed to award grades. Please try again.");
@@ -137,31 +142,78 @@ export default function InstructorGrading() {
 
   /* ================= UI ================= */
   return (
-    <div className="max-w-5xl">
-      <h2 className="text-2xl font-bold mb-6">Award Grades</h2>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-gray-900">Award Grades</h1>
+      </div>
 
-      {/* ================= STEP 1: SELECT COURSE ================= */}
+      {/* ================= STEP 1: SELECT COURSE (TABLE VIEW) ================= */}
       {!selectedCourse && (
-        <div className="bg-white shadow rounded-xl p-6">
-          <h3 className="text-lg font-semibold mb-4">Select a Course</h3>
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="p-6 border-b">
+            <h2 className="text-lg font-semibold text-gray-900">Select a Course to Grade</h2>
+          </div>
 
           {courses.length === 0 ? (
-            <p className="text-gray-600">No courses found.</p>
+            <div className="p-6 text-center text-gray-600">
+              No courses found.
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {courses.map((course) => (
-                <button
-                  key={course.course_id}
-                  onClick={() => setSelectedCourse(course)}
-                  className="bg-blue-50 border-2 border-blue-200 hover:border-blue-600 hover:bg-blue-100 rounded-lg p-4 text-left transition"
-                >
-                  <p className="font-bold text-blue-900">{course.course_code}</p>
-                  <p className="text-sm text-gray-700">{course.title}</p>
-                  <p className="text-xs text-gray-600 mt-2">
-                    Enrolled: {course.enrolled_count}/{course.capacity}
-                  </p>
-                </button>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b">
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                      Course
+                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                      Department
+                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                      Session
+                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                      Enrolled
+                    </th>
+                    <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {courses.map((course) => (
+                    <tr key={course.course_id} className="hover:bg-gray-50 transition">
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {course.course_code}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {course.title}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {course.department}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {course.acad_session}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {course.enrolled_count}/{course.capacity}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => setSelectedCourse(course)}
+                          className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                        >
+                          Grade
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -176,55 +228,79 @@ export default function InstructorGrading() {
               setEnrolledStudents([]);
               setGrades({});
             }}
-            className="text-blue-600 mb-4 hover:underline"
+            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
           >
             ← Back to Course Selection
           </button>
 
-          <div className="bg-white shadow rounded-xl p-6 mb-6">
-            <h3 className="text-lg font-semibold">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900">
               {selectedCourse.course_code} — {selectedCourse.title}
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              {selectedCourse.department} • {selectedCourse.acad_session}
+            </h2>
+            <p className="text-sm text-gray-600 mt-2">
+              <span className="font-medium">Department:</span> {selectedCourse.department} •
+              <span className="ml-4 font-medium">Session:</span> {selectedCourse.acad_session} •
+              <span className="ml-4 font-medium">Enrolled:</span> {selectedCourse.enrolled_count}/{selectedCourse.capacity}
             </p>
           </div>
 
           {loading ? (
-            <p className="text-gray-600">Loading enrolled students...</p>
+            <div className="bg-white rounded-lg shadow p-6 text-center text-gray-600">
+              Loading enrolled students...
+            </div>
           ) : enrolledStudents.length === 0 ? (
-            <p className="text-gray-600">No enrolled students in this course.</p>
+            <div className="bg-white rounded-lg shadow p-6 text-center text-gray-600">
+              No enrolled students in this course.
+            </div>
           ) : (
             <>
-              <div className="bg-white shadow rounded-xl overflow-hidden">
+              {/* ================= STUDENTS TABLE ================= */}
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="p-6 border-b bg-gray-50">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Assign Grades to {enrolledStudents.length} Student(s)
+                  </h3>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-gray-100 border-b">
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
+                      <tr className="bg-gray-50 border-b">
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                           Student Name
                         </th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                           Email
                         </th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                          Grade
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                          Current Grade
+                        </th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                          New Grade
                         </th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y">
                       {enrolledStudents.map((student) => (
                         <tr
                           key={student.enrollment_id}
-                          className="border-b hover:bg-gray-50"
+                          className="hover:bg-gray-50 transition"
                         >
-                          <td className="px-6 py-4 text-sm">
+                          <td className="px-6 py-4">
                             <p className="font-medium text-gray-900">
                               {student.student?.full_name}
                             </p>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
                             {student.student?.email}
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <span className={`font-medium ${
+                              student.grade 
+                                ? "text-gray-900" 
+                                : "text-gray-400"
+                            }`}>
+                              {student.grade || "NULL"}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-sm">
                             <select
@@ -235,7 +311,7 @@ export default function InstructorGrading() {
                                   e.target.value
                                 )
                               }
-                              className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 text-sm"
                             >
                               <option value="">-- Select Grade --</option>
                               {GRADING_SCHEME.map((item) => (
@@ -257,23 +333,23 @@ export default function InstructorGrading() {
               </div>
 
               {/* ================= GRADING SCHEME REFERENCE ================= */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-6 mb-6">
-                <p className="text-sm font-semibold text-blue-900 mb-3">
-                  📋 Grading Scheme Reference:
+              <div className="bg-white rounded-lg shadow p-6">
+                <p className="text-sm font-semibold text-gray-900 mb-3">
+                  Grading Scheme Reference
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                   {GRADING_SCHEME.map((item) => (
                     <div
                       key={item.grade}
-                      className="bg-white rounded px-2 py-1 border border-blue-200"
+                      className="bg-gray-50 rounded px-3 py-2 border border-gray-200 text-center"
                     >
-                      <span className="font-semibold text-blue-700">
+                      <span className="font-semibold text-gray-900 text-sm">
                         {item.display}
                       </span>
                       {item.points !== null && (
-                        <span className="text-gray-600 ml-1">
-                          = {item.points}
-                        </span>
+                        <div className="text-gray-600 text-xs mt-1">
+                          {item.points} pts
+                        </div>
                       )}
                     </div>
                   ))}
@@ -288,14 +364,14 @@ export default function InstructorGrading() {
                     setEnrolledStudents([]);
                     setGrades({});
                   }}
-                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 font-medium"
+                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-900 transition"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmitGrades}
                   disabled={submitting}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition disabled:opacity-50"
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition disabled:opacity-50"
                 >
                   {submitting ? "Submitting..." : "Award Grades"}
                 </button>
