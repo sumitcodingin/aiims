@@ -2,6 +2,7 @@ import { useState } from "react";
 import InstructorApprovals from "./instructor/InstructorApprovals";
 import FloatCourse from "./instructor/FloatCourse";
 import InstructorFeedback from "./instructor/InstructorFeedback";
+import AllCourses from "./instructor/AllCourses"; // <--- IMPORT THIS
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
@@ -28,6 +29,14 @@ export default function InstructorDashboard() {
               onClick={() => setActiveTab("approvals")}
             >
               My Courses
+            </NavBtn>
+            
+            {/* NEW NAV BUTTON */}
+            <NavBtn
+              active={activeTab === "all-courses"}
+              onClick={() => setActiveTab("all-courses")}
+            >
+              All Offerings
             </NavBtn>
 
             <NavBtn
@@ -66,8 +75,11 @@ export default function InstructorDashboard() {
 
       {/* ================= MAIN CONTENT ================= */}
       <main className="ml-64 p-6 min-h-screen overflow-y-auto">
-        {/* APPROVALS */}
+        {/* APPROVALS (MY COURSES) */}
         {activeTab === "approvals" && <InstructorApprovals />}
+
+        {/* NEW: ALL COURSES SECTION */}
+        {activeTab === "all-courses" && <AllCourses />}
 
         {/* FLOAT COURSE */}
         {activeTab === "float" && (
