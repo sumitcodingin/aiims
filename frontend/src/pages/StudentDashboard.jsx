@@ -1,8 +1,10 @@
 import { useState } from "react";
+
 import Courses from "./student/Courses";
 import StudentProfile from "./student/StudentProfile";
 import StudentRecords from "./student/StudentRecords";
 import CourseInstructorFeedback from "./student/CourseInstructorFeedback";
+import AcademicEvents from "./student/AcademicEvents";
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("courses");
@@ -29,20 +31,30 @@ export default function StudentDashboard() {
               active={activeTab === "courses"}
               onClick={() => setActiveTab("courses")}
             />
+
             <NavButton
               label="Profile"
               active={activeTab === "profile"}
               onClick={() => setActiveTab("profile")}
             />
+
             <NavButton
               label="Records"
               active={activeTab === "records"}
               onClick={() => setActiveTab("records")}
             />
+
             <NavButton
               label="Feedback"
               active={activeTab === "feedback"}
               onClick={() => setActiveTab("feedback")}
+            />
+
+            {/* ✅ Academic Events — SAME FLOW */}
+            <NavButton
+              label="Academic Events"
+              active={activeTab === "academic-events"}
+              onClick={() => setActiveTab("academic-events")}
             />
           </div>
         </div>
@@ -68,6 +80,7 @@ export default function StudentDashboard() {
         {activeTab === "profile" && <StudentProfile />}
         {activeTab === "records" && <StudentRecords />}
         {activeTab === "feedback" && <CourseInstructorFeedback />}
+        {activeTab === "academic-events" && <AcademicEvents />}
       </main>
     </div>
   );

@@ -2,11 +2,11 @@ import { useState } from "react";
 import InstructorApprovals from "./instructor/InstructorApprovals";
 import FloatCourse from "./instructor/FloatCourse";
 import InstructorFeedback from "./instructor/InstructorFeedback";
-import AllCourses from "./instructor/AllCourses"; // <--- IMPORT THIS
+import AcademicEvents from "./student/AcademicEvents"; // ✅ reuse same component
+import AllCourses from "./instructor/AllCourses"; // <--- IMPORT ADDED
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
-
   const user = JSON.parse(sessionStorage.getItem("user"));
 
   const logout = () => {
@@ -30,8 +30,8 @@ export default function InstructorDashboard() {
             >
               My Courses
             </NavBtn>
-            
-            {/* NEW NAV BUTTON */}
+
+            {/* ✅ NEW: ALL COURSES TAB */}
             <NavBtn
               active={activeTab === "all-courses"}
               onClick={() => setActiveTab("all-courses")}
@@ -51,6 +51,14 @@ export default function InstructorDashboard() {
               onClick={() => setActiveTab("feedback")}
             >
               Feedback
+            </NavBtn>
+
+            {/* ✅ Academic Events (Preserved) */}
+            <NavBtn
+              active={activeTab === "academic-events"}
+              onClick={() => setActiveTab("academic-events")}
+            >
+              Academic Events
             </NavBtn>
 
             <NavBtn
@@ -75,10 +83,10 @@ export default function InstructorDashboard() {
 
       {/* ================= MAIN CONTENT ================= */}
       <main className="ml-64 p-6 min-h-screen overflow-y-auto">
-        {/* APPROVALS (MY COURSES) */}
+        {/* MY COURSES */}
         {activeTab === "approvals" && <InstructorApprovals />}
 
-        {/* NEW: ALL COURSES SECTION */}
+        {/* ✅ NEW: ALL COURSES SECTION */}
         {activeTab === "all-courses" && <AllCourses />}
 
         {/* FLOAT COURSE */}
@@ -88,6 +96,9 @@ export default function InstructorDashboard() {
 
         {/* FEEDBACK */}
         {activeTab === "feedback" && <InstructorFeedback />}
+
+        {/* ACADEMIC EVENTS */}
+        {activeTab === "academic-events" && <AcademicEvents />}
 
         {/* PROFILE */}
         {activeTab === "profile" && (
