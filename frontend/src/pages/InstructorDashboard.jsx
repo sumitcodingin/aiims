@@ -1,11 +1,12 @@
 import { useState } from "react";
+
 import InstructorApprovals from "./instructor/InstructorApprovals";
 import FloatCourse from "./instructor/FloatCourse";
 import InstructorFeedback from "./instructor/InstructorFeedback";
+import AcademicEvents from "./student/AcademicEvents"; // ✅ reuse same component
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
-
   const user = JSON.parse(sessionStorage.getItem("user"));
 
   const logout = () => {
@@ -44,6 +45,14 @@ export default function InstructorDashboard() {
               Feedback
             </NavBtn>
 
+            {/* ✅ Academic Events (NEW) */}
+            <NavBtn
+              active={activeTab === "academic-events"}
+              onClick={() => setActiveTab("academic-events")}
+            >
+              Academic Events
+            </NavBtn>
+
             <NavBtn
               active={activeTab === "profile"}
               onClick={() => setActiveTab("profile")}
@@ -66,7 +75,7 @@ export default function InstructorDashboard() {
 
       {/* ================= MAIN CONTENT ================= */}
       <main className="ml-64 p-6 min-h-screen overflow-y-auto">
-        {/* APPROVALS */}
+        {/* MY COURSES */}
         {activeTab === "approvals" && <InstructorApprovals />}
 
         {/* FLOAT COURSE */}
@@ -76,6 +85,9 @@ export default function InstructorDashboard() {
 
         {/* FEEDBACK */}
         {activeTab === "feedback" && <InstructorFeedback />}
+
+        {/* ACADEMIC EVENTS */}
+        {activeTab === "academic-events" && <AcademicEvents />}
 
         {/* PROFILE */}
         {activeTab === "profile" && (
