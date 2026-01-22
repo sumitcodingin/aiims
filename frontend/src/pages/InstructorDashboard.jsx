@@ -2,6 +2,7 @@ import { useState } from "react";
 import InstructorApprovals from "./instructor/InstructorApprovals";
 import FloatCourse from "./instructor/FloatCourse";
 import InstructorFeedback from "./instructor/InstructorFeedback";
+import InstructorGrading from "./instructor/InstructorGrading";
 import AcademicEvents from "./student/AcademicEvents";
 import AllCourses from "./instructor/AllCourses";
 import InstructorProfile from "./instructor/InstructorProfile"; // ✅ NEW IMPORT
@@ -55,6 +56,13 @@ export default function InstructorDashboard() {
             </NavBtn>
 
             <NavBtn
+              active={activeTab === "grading"}
+              onClick={() => setActiveTab("grading")}
+            >
+              Award Grades
+            </NavBtn>
+
+            <NavBtn
               active={activeTab === "academic-events"}
               onClick={() => setActiveTab("academic-events")}
             >
@@ -96,6 +104,8 @@ export default function InstructorDashboard() {
         )}
 
         {activeTab === "feedback" && <InstructorFeedback />}
+
+        {activeTab === "grading" && <InstructorGrading />}
 
         {activeTab === "academic-events" && <AcademicEvents />}
 
