@@ -91,6 +91,7 @@ const getCourseApplications = async (req, res) => {
       .select(`
         enrollment_id,
         status,
+        grade,
         student:users (
           user_id,
           full_name,

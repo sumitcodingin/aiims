@@ -121,12 +121,17 @@ export default function InstructorGrading() {
 
       await Promise.all(gradeRequests);
 
-      alert("✅ Grades awarded successfully!");
+      // Update the enrolledStudents with the new grades
+      const updatedStudents = enrolledStudents.map((student) => ({
+        ...student,
+        grade: grades[student.enrollment_id],
+      }));
+      setEnrolledStudents(updatedStudents);
 
-      // Reset
-      setSelectedCourse(null);
-      setEnrolledStudents([]);
+      // Clear the "New Grade" dropdowns
       setGrades({});
+
+      alert("✅ Grades awarded successfully!");
     } catch (err) {
       console.error("Failed to award grades:", err);
       alert("Failed to award grades. Please try again.");
@@ -267,7 +272,10 @@ export default function InstructorGrading() {
                           Email
                         </th>
                         <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                          Grade
+                          Current Grade
+                        </th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                          New Grade
                         </th>
                       </tr>
                     </thead>
@@ -284,6 +292,15 @@ export default function InstructorGrading() {
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
                             {student.student?.email}
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <span className={`font-medium ${
+                              student.grade 
+                                ? "text-gray-900" 
+                                : "text-gray-400"
+                            }`}>
+                              {student.grade || "NULL"}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-sm">
                             <select
