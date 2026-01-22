@@ -170,7 +170,7 @@ export default function AdvisorDashboard() {
                   </div>
 
                   <div className="flex gap-2">
-                    {!c.status === "APPROVED" && (
+                    {!(c.status === "APPROVED") && (
                       <button
                         onClick={() =>
                           handleCourseAction(c.course_id, "APPROVE")
@@ -181,7 +181,7 @@ export default function AdvisorDashboard() {
                       </button>
                     )}
 
-                    {!c.status === "APPROVED" && (
+                    {!(c.status === "APPROVED") && (
                       <button
                         onClick={() =>
                           handleCourseAction(c.course_id, "REJECT")

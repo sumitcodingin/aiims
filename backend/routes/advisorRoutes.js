@@ -4,7 +4,7 @@ const advisorController = require('../controllers/advisorController');
 
 // Course Approval Routes
 router.get('/pending-courses', advisorController.getFloatedCourses); // Fetches Pending & Approved
-router.post('/approve-course', advisorController.approveCourse);
+router.post('/approve-course', advisorController.approveCourse);     // Handles Accept/Reject logic
 
 // Student Approval Routes
 router.get('/student-courses', advisorController.getAdvisorStudentCourses); // The "Union" list

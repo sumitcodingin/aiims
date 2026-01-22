@@ -38,7 +38,8 @@ exports.getFloatedCourses = async (req, res) => {
         instructor:users!faculty_id ( full_name, email )
       `)
       .eq("advisor_id", advisor_id) // Strict check: Only courses assigned to me
-      .in("status", ["PENDING_ADVISOR_APPROVAL", "APPROVED"]); // Show both so Approved stay visible
+      // Show PENDING, APPROVED, and REJECTED so advisor can see all history
+      .in("status", ["PENDING_ADVISOR_APPROVAL", "APPROVED", "REJECTED"]);
 
     if (error) throw error;
     res.json(courses || []);
@@ -51,8 +52,9 @@ exports.getFloatedCourses = async (req, res) => {
 // B. Approve / Reject Floated Course
 exports.approveCourse = async (req, res) => {
   const { course_id, action, advisor_id } = req.body;
+  
   try {
-    // 1. Fetch the course
+    // 1. Fetch the course to verify ownership
     const { data: course } = await supabase
       .from("courses")
       .select("advisor_id, status")
@@ -61,19 +63,19 @@ exports.approveCourse = async (req, res) => {
 
     if (!course) return res.status(404).json({ error: "Course not found." });
 
-    // 2. Strict Security Check
+    // 2. Strict Security Check: Ensure the logged-in advisor owns this course request
     if (String(course.advisor_id) !== String(advisor_id)) {
       return res.status(403).json({ error: "Unauthorized: You are not the advisor for this instructor." });
     }
 
-    // 3. Set New Status
+    // 3. Determine New Status
     let newStatus = "";
     if (action === "APPROVE") {
         newStatus = "APPROVED";
     } else if (action === "REJECT") {
         newStatus = "REJECTED";
     } else {
-        return res.status(400).json({ error: "Invalid action." });
+        return res.status(400).json({ error: "Invalid action. Use APPROVE or REJECT." });
     }
 
     // 4. Update Database
@@ -84,7 +86,7 @@ exports.approveCourse = async (req, res) => {
     
     if (error) throw error;
     
-    res.json({ message: `Course status updated to ${newStatus}.` });
+    res.json({ message: `Course status updated to ${newStatus}.`, status: newStatus });
   } catch (err) {
     console.error("COURSE APPROVAL ERROR:", err);
     res.status(500).json({ error: "Course approval failed." });
@@ -115,6 +117,7 @@ exports.getAdvisorStudentCourses = async (req, res) => {
     const countMap = {};
 
     (data || []).forEach((row) => {
+      // Filter strictly for students assigned to this advisor
       if (row.student && String(row.student.advisor_id) === String(advisor_id) && row.course) {
         uniqueCourses[row.course.course_id] = row.course;
       }

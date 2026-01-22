@@ -29,7 +29,8 @@ export default function CourseApprovals() {
   }, []);
 
   const handleAction = async (courseId, action) => {
-    if (!window.confirm(`Are you sure you want to ${action} this course?`)) return;
+    const actionText = action === 'APPROVE' ? 'Accept' : 'Reject';
+    if (!window.confirm(`Are you sure you want to ${actionText} this course?`)) return;
 
     try {
       await api.post("/advisor/approve-course", {
@@ -40,9 +41,11 @@ export default function CourseApprovals() {
       
       // 1. Refresh list
       await fetchCourses();
-      // 2. Close detail view to reset UI state
+      // 2. Close detail view if open
       setSelectedCourse(null);
+      alert(`Course ${actionText}ed successfully.`);
     } catch (err) {
+      console.error(err);
       alert("Action failed. Please try again.");
     }
   };
@@ -65,7 +68,9 @@ export default function CourseApprovals() {
                   key={c.course_id} 
                   onClick={() => setSelectedCourse(c)}
                   className={`bg-white p-6 rounded shadow border-l-4 cursor-pointer hover:shadow-lg transition relative
-                    ${c.status === 'APPROVED' ? 'border-green-500 bg-gray-50' : 'border-yellow-500 bg-white'}`}
+                    ${c.status === 'APPROVED' ? 'border-green-500 bg-gray-50' : 
+                      c.status === 'REJECTED' ? 'border-red-500 bg-red-50' : 
+                      'border-yellow-500 bg-white'}`}
                 >
                   <div className="flex justify-between items-start">
                     <div>
@@ -79,17 +84,36 @@ export default function CourseApprovals() {
 
                       <div className="mt-3">
                         <span className={`inline-block px-2 py-1 text-xs font-bold rounded uppercase
-                          ${c.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          ${c.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 
+                            c.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'}`}>
                           {c.status.replace(/_/g, " ")}
                         </span>
                       </div>
                     </div>
                   </div>
                   
-                  {/* 🚀 VISUAL CUE: Different text based on status */}
-                  <p className={`mt-4 text-sm font-semibold underline text-center ${c.status === 'APPROVED' ? 'text-gray-500' : 'text-blue-600'}`}>
-                    {c.status === 'APPROVED' ? 'View Details (Read Only)' : 'Review & Take Action'}
-                  </p>
+                  {/* === ACTION BUTTONS ON CARD (For Quick Access) === */}
+                  {c.status === 'PENDING_ADVISOR_APPROVAL' ? (
+                    <div className="mt-4 pt-4 border-t flex gap-3">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleAction(c.course_id, 'APPROVE'); }}
+                        className="flex-1 bg-green-600 text-white text-sm py-2 rounded hover:bg-green-700 font-bold"
+                      >
+                        Accept
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleAction(c.course_id, 'REJECT'); }}
+                        className="flex-1 bg-red-600 text-white text-sm py-2 rounded hover:bg-red-700 font-bold"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm font-semibold text-center text-gray-500">
+                      {c.status === 'APPROVED' ? 'View Details' : 'View Rejected Proposal'}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -134,7 +158,7 @@ export default function CourseApprovals() {
           <div>
             <h4 className="text-lg font-bold mb-3">Status</h4>
             
-            {/* 🚀 BUG FIX: IF APPROVED, RENDER ZERO BUTTONS. */}
+            {/* Logic: Show Buttons only if Pending */}
             {selectedCourse.status === 'APPROVED' ? (
               <div className="bg-green-50 p-6 rounded border border-green-200">
                 <div className="flex items-center gap-3">
@@ -146,7 +170,18 @@ export default function CourseApprovals() {
                     </p>
                   </div>
                 </div>
-                {/* ABSOLUTELY NO BUTTONS HERE */}
+              </div>
+            ) : selectedCourse.status === 'REJECTED' ? (
+              <div className="bg-red-50 p-6 rounded border border-red-200">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">❌</span>
+                  <div>
+                    <h5 className="text-red-800 font-bold text-xl">Course Rejected</h5>
+                    <p className="text-red-700 text-sm mt-1">
+                      You have rejected this course proposal.
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="bg-yellow-50 p-6 rounded border border-yellow-200">
