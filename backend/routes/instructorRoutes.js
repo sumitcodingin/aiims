@@ -9,6 +9,8 @@ const {
   floatCourse,
   getInstructorFeedback,
   getEnrolledStudentsForCourse,
+  validateGradesCSV,
+  submitMassGrades,
 } = require("../controllers/instructorController");
 
 /* ==================================
@@ -27,5 +29,7 @@ router.get("/enrolled-students/:course_id", getEnrolledStudentsForCourse);
 router.post("/approve-request", approveByInstructor);
 router.post("/award-grade", awardGrade);
 router.post("/float-course", floatCourse);
+router.post("/validate-grades-csv", validateGradesCSV);
+router.post("/submit-mass-grades", submitMassGrades);
 
 module.exports = router;

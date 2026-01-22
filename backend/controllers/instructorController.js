@@ -387,6 +387,177 @@ const getEnrolledStudentsForCourse = async (req, res) => {
   }
 };
 
+// ===================================================
+// 8. Validate Grades CSV
+// ===================================================
+const validateGradesCSV = async (req, res) => {
+  const { course_id, instructor_id, data, valid_grades } = req.body;
+
+  console.log("Validating CSV for course:", course_id);
+
+  try {
+    // 1. Verify instructor owns this course
+    const { data: course, error: courseError } = await supabase
+      .from("courses")
+      .select("course_id, faculty_id")
+      .eq("course_id", course_id)
+      .single();
+
+    if (courseError || !course) {
+      return res.status(404).json({ error: "Course not found." });
+    }
+
+    if (String(course.faculty_id) !== String(instructor_id)) {
+      return res.status(403).json({ error: "Unauthorized." });
+    }
+
+    // 2. Fetch all enrolled students for this course
+    const { data: enrollments, error: enrollError } = await supabase
+      .from("enrollments")
+      .select(`
+        enrollment_id,
+        student_id,
+        users!inner (
+          full_name,
+          email
+        )
+      `)
+      .eq("course_id", course_id)
+      .eq("status", "ENROLLED");
+
+    if (enrollError) throw enrollError;
+
+    // 3. Create a map for quick lookup: email -> (name, enrollment_id)
+    const studentMap = {};
+    enrollments.forEach((enrollment) => {
+      const email = enrollment.users?.email?.toLowerCase();
+      const name = enrollment.users?.full_name;
+      if (email && name) {
+        if (!studentMap[email]) {
+          studentMap[email] = [];
+        }
+        studentMap[email].push({
+          name,
+          enrollment_id: enrollment.enrollment_id,
+        });
+      }
+    });
+
+    // 4. Validate each row
+    const valid_rows = [];
+    const invalid_rows = [];
+
+    data.forEach((row, idx) => {
+      const rowNum = idx + 2; // +2 because 1-indexed and skip header
+      let error = null;
+
+      // Check grade validity
+      if (!row.grade || !valid_grades.includes(row.grade.trim())) {
+        error = `Invalid grade "${row.grade}". Must be one of: ${valid_grades.join(", ")}`;
+      }
+
+      // Check student exists
+      const email = row.email?.toLowerCase();
+      const name = row.name?.trim();
+
+      if (!error && !email) {
+        error = "Email is required.";
+      }
+
+      if (!error && !name) {
+        error = "Student Name is required.";
+      }
+
+      if (!error && !studentMap[email]) {
+        error = `No enrolled student found with email "${row.email}".`;
+      }
+
+      if (!error) {
+        // Find matching student by name and email
+        const matches = studentMap[email].filter(
+          (s) => s.name.toLowerCase() === name.toLowerCase()
+        );
+
+        if (matches.length === 0) {
+          error = `No enrolled student found with name "${row.name}" and email "${row.email}".`;
+        } else {
+          valid_rows.push({
+            name: row.name,
+            email: row.email,
+            grade: row.grade.trim(),
+            enrollment_id: matches[0].enrollment_id,
+          });
+        }
+      }
+
+      if (error) {
+        invalid_rows.push({
+          row_number: rowNum,
+          error,
+        });
+      }
+    });
+
+    res.status(200).json({
+      valid_rows,
+      invalid_rows,
+    });
+  } catch (err) {
+    console.error("VALIDATE CSV ERROR:", err);
+    res.status(500).json({ error: "Failed to validate CSV data." });
+  }
+};
+
+// ===================================================
+// 9. Submit Mass Grades
+// ===================================================
+const submitMassGrades = async (req, res) => {
+  const { course_id, instructor_id, grades } = req.body;
+
+  console.log("Submitting mass grades:", grades.length);
+
+  try {
+    // 1. Verify instructor owns this course
+    const { data: course, error: courseError } = await supabase
+      .from("courses")
+      .select("course_id, faculty_id")
+      .eq("course_id", course_id)
+      .single();
+
+    if (courseError || !course) {
+      return res.status(404).json({ error: "Course not found." });
+    }
+
+    if (String(course.faculty_id) !== String(instructor_id)) {
+      return res.status(403).json({ error: "Unauthorized." });
+    }
+
+    // 2. Update all grades
+    const updatePromises = grades.map((g) =>
+      supabase
+        .from("enrollments")
+        .update({ grade: g.grade })
+        .eq("enrollment_id", g.enrollment_id)
+    );
+
+    const results = await Promise.all(updatePromises);
+
+    // Check for errors
+    const hasErrors = results.some((r) => r.error);
+    if (hasErrors) {
+      throw new Error("One or more grade updates failed.");
+    }
+
+    res.status(200).json({
+      message: `Successfully awarded grades to ${grades.length} student(s).`,
+      count: grades.length,
+    });
+  } catch (err) {
+    console.error("SUBMIT MASS GRADES ERROR:", err);
+    res.status(500).json({ error: "Failed to submit mass grades." });
+  }
+};
+
 module.exports = { 
   getInstructorCourses, 
   getCourseApplications, 
@@ -394,5 +565,7 @@ module.exports = {
   awardGrade, 
   floatCourse, 
   getInstructorFeedback,
-  getEnrolledStudentsForCourse
+  getEnrolledStudentsForCourse,
+  validateGradesCSV,
+  submitMassGrades
 };
