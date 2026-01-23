@@ -1,4 +1,5 @@
 const supabase = require("../supabaseClient");
+const { sendCustomEmail } = require("../utils/sendCustomEmail");
 const { sendStatusEmail } = require('../utils/sendEmail');
 
 /* ===================================================
@@ -399,5 +400,41 @@ exports.getAdvisorStudentDetails = async (req, res) => {
   } catch (err) {
     console.error("GET STUDENT DETAILS ERROR:", err);
     res.status(500).json({ error: "Failed to fetch student details." });
+  }
+};
+exports.sendEmailToStudent = async (req, res) => {
+  const { advisor_id, to, subject, message, cc = [], bcc = [] } = req.body;
+
+  if (!advisor_id || !to || !subject || !message) {
+    return res.status(400).json({ error: "Missing required fields." });
+  }
+
+  try {
+    // 🔐 Verify advisor
+    const { data: advisor, error } = await supabase
+      .from("users")
+      .select("user_id")
+      .eq("user_id", advisor_id)
+      .eq("role", "Advisor")
+      .single();
+
+    if (error || !advisor) {
+      return res.status(403).json({ error: "Unauthorized advisor." });
+    }
+
+    // 📧 Send email
+    await sendCustomEmail({
+      to,
+      subject,
+      text: message,
+      cc,
+      bcc,
+    });
+
+    res.json({ message: "Email sent successfully." });
+
+  } catch (err) {
+    console.error("SEND EMAIL ERROR:", err);
+    res.status(500).json({ error: "Failed to send email." });
   }
 };

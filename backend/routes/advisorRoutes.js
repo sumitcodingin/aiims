@@ -13,6 +13,8 @@ router.post('/approve-student', advisorController.approveByAdvisor); // Accept/R
 // advisorRoutes.js
 router.get("/all-students", advisorController.getAllAdvisorStudents);
 router.get("/student-details", advisorController.getAdvisorStudentDetails);
+router.post("/send-student-email", advisorController.sendEmailToStudent);
+
 
 
 module.exports = router;

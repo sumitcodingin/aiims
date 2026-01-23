@@ -13,11 +13,14 @@ const adminRoutes = require('./routes/adminRoutes');
 const courseRoutes = require('./routes/courseRoutes');
 const userRoutes = require('./routes/userRoutes');
 
+
 const app = express();
 
 // ============================
 // MIDDLEWARES
 // ============================
+
+
 app.use(cors());
 app.use(express.json());
 
