@@ -160,19 +160,120 @@ exports.dropCourse = async (req, res) => {
 };
 
 // ===================================
+// Helper: Grade Point Mapping
+// ===================================
+const GRADE_POINTS = {
+  'A': 10, 'A-': 9, 'B': 8, 'B-': 7, 'C': 6, 'C-': 5, 'D': 4,
+  'E': 2, 'F': 0, 'NP': null, 'NF': null, 'I': null, 'W': null, 'S': null, 'U': null
+};
+
+const calculateSGPA = (records) => {
+  let totalPoints = 0;
+  let totalCredits = 0;
+  
+  records.forEach(record => {
+    if (record.courses && record.grade && GRADE_POINTS[record.grade] !== null) {
+      const gradePoint = GRADE_POINTS[record.grade];
+      const credits = record.courses.credits || 0;
+      totalPoints += credits * gradePoint;
+      totalCredits += credits;
+    }
+  });
+  
+  return totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '0.00';
+};
+
+// ===================================
 // 3. Get student records
 // ===================================
 exports.getStudentRecords = async (req, res) => {
   const { student_id, session } = req.query;
   try {
-    const { data, error } = await supabase.from('enrollments').select(`enrollment_id, status, grade, course_id, courses(course_id, course_code, title, acad_session)`).eq('student_id', student_id).eq('courses.acad_session', session).order('enrollment_id', { ascending: false });
+    const { data, error } = await supabase
+      .from('enrollments')
+      .select(`enrollment_id, status, grade, course_id, courses(course_id, course_code, title, acad_session, credits)`)
+      .eq('student_id', student_id)
+      .eq('courses.acad_session', session)
+      .order('enrollment_id', { ascending: false });
+    
     if (error) throw error;
-    res.json(data);
+    
+    const sgpa = calculateSGPA(data);
+    res.json({ records: data, sgpa });
   } catch (err) { res.status(500).json({ error: 'Failed to fetch records.' }); }
 };
 
 // ===================================
-// 4. Get Student Profile
+// 4. Get all student records (for CGPA)
+// ===================================
+exports.getAllStudentRecords = async (req, res) => {
+  const { student_id } = req.query;
+  try {
+    const { data, error } = await supabase
+      .from('enrollments')
+      .select(`enrollment_id, status, grade, course_id, courses(course_id, course_code, title, acad_session, credits)`)
+      .eq('student_id', student_id)
+      .order('courses(acad_session)', { ascending: true });
+    
+    if (error) throw error;
+    
+    // Group by session
+    const bySession = {};
+    data.forEach(record => {
+      const session = record.courses?.acad_session || 'Unknown';
+      if (!bySession[session]) bySession[session] = [];
+      bySession[session].push(record);
+    });
+    
+    // Calculate SGPA for each session and overall CGPA
+    let totalCumulativePoints = 0;
+    let totalCumulativeCredits = 0;
+    const sessions = {};
+    
+    Object.entries(bySession).forEach(([session, records]) => {
+      const sgpa = calculateSGPA(records);
+      
+      // Calculate credits for this session
+      let sessionCredits = 0;
+      let sessionEarnedCredits = 0;
+      records.forEach(record => {
+        if (record.courses?.credits) {
+          sessionCredits += record.courses.credits;
+          if (record.status === 'ENROLLED' && record.grade && !['F', 'NF', 'I', 'W'].includes(record.grade)) {
+            sessionEarnedCredits += record.courses.credits;
+          }
+        }
+      });
+      
+      sessions[session] = {
+        sgpa,
+        credits_registered: sessionCredits,
+        credits_earned: sessionEarnedCredits,
+        records
+      };
+      
+      // Add to cumulative (only passed courses)
+      records.forEach(record => {
+        if (record.grade && GRADE_POINTS[record.grade] !== null && ['A', 'A-', 'B', 'B-', 'C', 'C-', 'D', 'E'].includes(record.grade)) {
+          const gradePoint = GRADE_POINTS[record.grade];
+          const credits = record.courses?.credits || 0;
+          totalCumulativePoints += credits * gradePoint;
+          totalCumulativeCredits += credits;
+        }
+      });
+    });
+    
+    const cgpa = totalCumulativeCredits > 0 ? (totalCumulativePoints / totalCumulativeCredits).toFixed(2) : '0.00';
+    
+    res.json({ sessions, cgpa, totalCumulativeCredits });
+  } catch (err) { 
+    console.error('GET ALL RECORDS ERROR:', err);
+    res.status(500).json({ error: 'Failed to fetch all records.' }); 
+  }
+};
+
+// ===================================
+// 5. Get Student Profile
 // ===================================
 exports.getStudentProfile = async (req, res) => {
   const { student_id } = req.query;

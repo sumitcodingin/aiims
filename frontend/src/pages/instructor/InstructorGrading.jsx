@@ -256,7 +256,7 @@ export default function InstructorGrading() {
           <div className="border border-gray-400 p-4 bg-white">
             <h3 className="font-bold">Mass Grading: {massGradingCourse.course_code}</h3>
             <div className="mt-4">
-                <label className="block text-xs font-bold mb-1">UPLOAD CSV (Name, Email, Grade)</label>
+                <label className="block text-xs font-bold mb-1">UPLOAD CSV (Student Name, Email, Grade)</label>
                 <input type="file" onChange={handleCSVUpload} className="text-xs border border-gray-400 p-1 w-full" />
             </div>
             {csvData.length > 0 && (
