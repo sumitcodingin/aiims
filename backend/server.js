@@ -27,6 +27,7 @@ app.use(express.json());
 // ============================
 // API ROUTES
 // ============================
+app.use(express.static("public"));
 app.use('/api/auth', authRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/instructor', instructorRoutes);
