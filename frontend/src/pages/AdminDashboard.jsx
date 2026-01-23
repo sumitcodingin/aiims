@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import api from "../services/api";
+import { Lock, Unlock, Settings } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("PENDING"); // Default to Pending Users
@@ -22,6 +23,17 @@ export default function AdminDashboard() {
 
           <div className="flex flex-col mt-4">
             <div className="px-6 py-2 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+              System
+            </div>
+            
+            <NavBtn
+              active={activeTab === "CONTROLS"}
+              onClick={() => setActiveTab("CONTROLS")}
+            >
+              System Controls
+            </NavBtn>
+
+            <div className="mt-4 px-6 py-2 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
               User Management
             </div>
             
@@ -83,6 +95,9 @@ export default function AdminDashboard() {
 
       {/* ================= MAIN CONTENT ================= */}
       <main className="ml-64 p-8 min-h-screen overflow-y-auto">
+        {/* Render System Controls */}
+        {activeTab === "CONTROLS" && <SystemControls />}
+
         {/* Render User List for Status Tabs */}
         {["PENDING", "ACTIVE", "BLOCKED", "REJECTED"].includes(activeTab) && (
           <UserList status={activeTab} />
@@ -91,6 +106,122 @@ export default function AdminDashboard() {
         {/* Render Course Management */}
         {activeTab === "OFFERINGS" && <AdminCourseList />}
       </main>
+    </div>
+  );
+}
+
+/* =========================================================
+   COMPONENT 0: SYSTEM CONTROLS (NEW)
+   ========================================================= */
+function SystemControls() {
+  const [settings, setSettings] = useState({ course_registration: true, grade_submission: true });
+  const [loading, setLoading] = useState(false);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await api.get('/admin/system-settings');
+      setSettings(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const toggleReg = async () => {
+    if(!window.confirm(`Are you sure you want to ${settings.course_registration ? 'CLOSE' : 'OPEN'} course registration?\nThis will email all Students, Instructors, and Advisors.`)) return;
+    setLoading(true);
+    try {
+        await api.post('/admin/toggle-registration', { isOpen: !settings.course_registration });
+        alert("Success! Notification emails sent.");
+        fetchSettings();
+    } catch(err) {
+        alert("Failed to toggle setting.");
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const toggleGrade = async () => {
+    if(!window.confirm(`Are you sure you want to ${settings.grade_submission ? 'CLOSE' : 'OPEN'} grade submission?\nThis will email all Instructors.`)) return;
+    setLoading(true);
+    try {
+        await api.post('/admin/toggle-grading', { isOpen: !settings.grade_submission });
+        alert("Success! Notification emails sent.");
+        fetchSettings();
+    } catch(err) {
+        alert("Failed to toggle setting.");
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto">
+        <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2">
+            <Settings className="text-gray-600"/> System Controls
+        </h2>
+
+        <div className="grid md:grid-cols-2 gap-6">
+            
+            {/* CARD 1: Course Registration */}
+            <div className={`p-6 rounded-lg border shadow-sm transition ${settings.course_registration ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 className="font-bold text-lg text-gray-800">Course Registration</h3>
+                        <p className="text-sm text-gray-600 mt-1">Controls student ability to Add/Drop courses.</p>
+                    </div>
+                    {settings.course_registration 
+                        ? <Unlock className="text-green-600" size={28}/> 
+                        : <Lock className="text-red-600" size={28}/>
+                    }
+                </div>
+                
+                <div className="mb-6">
+                    <span className={`px-2 py-1 text-xs font-bold rounded ${settings.course_registration ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                        STATUS: {settings.course_registration ? "OPEN" : "CLOSED"}
+                    </span>
+                </div>
+
+                <button 
+                    onClick={toggleReg} 
+                    disabled={loading}
+                    className={`w-full py-2 rounded text-sm font-bold text-white transition ${loading ? 'opacity-50' : 'hover:scale-105'} ${settings.course_registration ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+                >
+                    {loading ? "Processing..." : (settings.course_registration ? "Close Registration" : "Open Registration")}
+                </button>
+            </div>
+
+            {/* CARD 2: Grade Submission */}
+            <div className={`p-6 rounded-lg border shadow-sm transition ${settings.grade_submission ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 className="font-bold text-lg text-gray-800">Grade Submission</h3>
+                        <p className="text-sm text-gray-600 mt-1">Controls instructor ability to submit/edit grades.</p>
+                    </div>
+                    {settings.grade_submission 
+                        ? <Unlock className="text-green-600" size={28}/> 
+                        : <Lock className="text-red-600" size={28}/>
+                    }
+                </div>
+                
+                <div className="mb-6">
+                    <span className={`px-2 py-1 text-xs font-bold rounded ${settings.grade_submission ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                        STATUS: {settings.grade_submission ? "OPEN" : "CLOSED"}
+                    </span>
+                </div>
+
+                <button 
+                    onClick={toggleGrade} 
+                    disabled={loading}
+                    className={`w-full py-2 rounded text-sm font-bold text-white transition ${loading ? 'opacity-50' : 'hover:scale-105'} ${settings.grade_submission ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+                >
+                    {loading ? "Processing..." : (settings.grade_submission ? "Close Grading" : "Open Grading")}
+                </button>
+            </div>
+        </div>
     </div>
   );
 }
@@ -415,10 +546,9 @@ function AdminCourseList() {
     if (!window.confirm("Confirm delete this course? This action cannot be undone.")) return;
     
     try {
-        // Assuming a standard delete endpoint exists based on CRUD patterns
         await api.delete(`/courses/${courseId}`); 
         alert("Course deleted successfully.");
-        fetchData(); // Refresh list
+        fetchData(); 
     } catch (err) {
         console.error("Delete failed", err);
         alert("Failed to delete course.");

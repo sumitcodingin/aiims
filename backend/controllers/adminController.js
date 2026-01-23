@@ -1,5 +1,6 @@
 const supabase = require('../supabaseClient');
 const { sendNotificationEmail } = require('../utils/mailer');
+const { sendCustomEmail } = require('../utils/sendCustomEmail');
 
 // ============================
 // 1. Get All Users
@@ -122,5 +123,118 @@ exports.resetEnrollments = async (req, res) => {
     res.status(200).json({ message: "Enrollments reset successfully." });
   } catch (err) {
     res.status(500).json({ error: "Reset failed." });
+  }
+};
+
+// ============================
+// 5. Get System Settings
+// ============================
+exports.getSystemSettings = async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('system_settings').select('*');
+    if(error) throw error;
+    
+    // Convert array to object for easier frontend consumption
+    const settings = {};
+    data.forEach(item => { settings[item.key] = item.value === 'true'; });
+    
+    res.json(settings);
+  } catch (err) {
+    console.error("GET SETTINGS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+};
+
+// ============================
+// 6. Toggle Course Registration
+// ============================
+exports.toggleCourseRegistration = async (req, res) => {
+  const { isOpen } = req.body; // true or false
+  try {
+    // 1. Update DB
+    const { error } = await supabase
+      .from('system_settings')
+      .upsert({ key: 'course_registration', value: String(isOpen) });
+    
+    if(error) throw error;
+
+    // 2. Fetch Emails (Students, Instructors, Advisors)
+    const { data: users } = await supabase
+      .from('users')
+      .select('email')
+      .in('role', ['Student', 'Instructor', 'Advisor'])
+      .eq('account_status', 'ACTIVE');
+
+    const emails = users.map(u => u.email).filter(Boolean);
+
+    // 3. Send Bulk Email
+    if (emails.length > 0) {
+        const subject = isOpen 
+            ? "📢 Course Registration is NOW OPEN" 
+            : "🚫 Course Registration is CLOSED";
+        
+        const message = isOpen
+            ? "Dear User,\n\nThe course add/drop window is now OPEN. Students may proceed to register for courses.\n\nRegards,\nAcademic Administration"
+            : "Dear User,\n\nThe course add/drop window has been CLOSED. No further changes to enrollments are permitted.\n\nRegards,\nAcademic Administration";
+
+        await sendCustomEmail({
+            to: process.env.EMAIL_USER, // Send to self
+            bcc: emails, // Hide recipients
+            subject: subject,
+            text: message
+        });
+    }
+
+    res.json({ message: `Course registration ${isOpen ? 'Opened' : 'Closed'} and emails sent.` });
+  } catch (err) {
+    console.error("TOGGLE REGISTRATION ERROR:", err);
+    res.status(500).json({ error: "Failed to update registration status" });
+  }
+};
+
+// ============================
+// 7. Toggle Grade Submission
+// ============================
+exports.toggleGradeSubmission = async (req, res) => {
+  const { isOpen } = req.body; // true or false
+  try {
+    // 1. Update DB
+    const { error } = await supabase
+      .from('system_settings')
+      .upsert({ key: 'grade_submission', value: String(isOpen) });
+    
+    if(error) throw error;
+
+    // 2. Fetch Emails (Instructors Only)
+    const { data: users } = await supabase
+      .from('users')
+      .select('email')
+      .eq('role', 'Instructor')
+      .eq('account_status', 'ACTIVE');
+
+    const emails = users.map(u => u.email).filter(Boolean);
+
+    // 3. Send Bulk Email
+    if (emails.length > 0) {
+        const subject = isOpen 
+            ? "🎓 Grade Submission Portal OPEN" 
+            : "⏳ Grade Submission Portal CLOSED";
+        
+        const message = isOpen
+            ? "Dear Instructor,\n\nThe grade submission portal is now OPEN. You may proceed to award grades to your students.\n\nRegards,\nAcademic Administration"
+            : "Dear Instructor,\n\nThe grade submission portal is now CLOSED. If you have pending grades, please contact the admin.\n\nRegards,\nAcademic Administration";
+
+        await sendCustomEmail({
+            to: process.env.EMAIL_USER,
+            bcc: emails,
+            subject: subject,
+            text: message
+        });
+    }
+
+    res.json({ message: `Grade submission ${isOpen ? 'Opened' : 'Closed'} and emails sent.` });
+  } catch (err) {
+    console.error("TOGGLE GRADING ERROR:", err);
+    res.status(500).json({ error: "Failed to update grading status" });
   }
 };
