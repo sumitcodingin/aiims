@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
-import { Mail, Video, Calendar, CheckSquare, Square } from "lucide-react";
+import { Mail, Video, Calendar, CheckSquare, Square, Clock } from "lucide-react";
 
 export default function MyStudents() {
   const user = JSON.parse(sessionStorage.getItem("user"));
@@ -27,11 +27,18 @@ export default function MyStudents() {
   });
 
   const [showMeet, setShowMeet] = useState(false);
+  
+  // Time Selection State (AM/PM)
   const [meetData, setMeetData] = useState({
     date: "",
-    time: "",
+    startHour: "10",
+    startMinute: "00",
+    startPeriod: "AM",
+    endHour: "11",
+    endMinute: "00",
+    endPeriod: "AM",
     topic: "",
-    link: "", // Instructor can paste their personal room or generated link
+    link: "",
     description: ""
   });
 
@@ -125,12 +132,14 @@ export default function MyStudents() {
   };
 
   const scheduleMeeting = async () => {
-    if (!meetData.date || !meetData.time || !meetData.topic) {
-      alert("Please fill in Date, Time and Topic");
+    if (!meetData.date || !meetData.topic) {
+      alert("Please fill in Date and Topic");
       return;
     }
 
-    // Use selected students OR all filtered if none selected (optional logic, sticking to explicit selection here)
+    const startTime = `${meetData.startHour}:${meetData.startMinute} ${meetData.startPeriod}`;
+    const endTime = `${meetData.endHour}:${meetData.endMinute} ${meetData.endPeriod}`;
+
     const targets = selectedEmails.length > 0 ? selectedEmails : [];
     
     if (targets.length === 0) {
@@ -143,15 +152,16 @@ export default function MyStudents() {
         advisor_id: user.id,
         student_emails: targets,
         date: meetData.date,
-        time: meetData.time,
+        start_time: startTime,
+        end_time: endTime,
         topic: meetData.topic,
-        meet_link: meetData.link || "https://meet.google.com/new", // Default to new if empty
+        meet_link: meetData.link || "https://meet.google.com/new",
         description: meetData.description
       });
 
-      alert("Meeting scheduled! Invites sent to students.");
+      alert("Meeting scheduled! Invites sent.");
       setShowMeet(false);
-      setSelectedEmails([]); // Clear selection
+      setSelectedEmails([]); 
     } catch (error) {
       console.error(error);
       alert("Failed to schedule meeting.");
@@ -384,7 +394,7 @@ export default function MyStudents() {
         </div>
       )}
 
-      {/* ================= MEET SCHEDULER MODAL ================= */}
+      {/* ================= MEET SCHEDULER MODAL (UPDATED) ================= */}
       {showMeet && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg w-full max-w-lg p-6 shadow-xl">
@@ -394,13 +404,53 @@ export default function MyStudents() {
             </div>
             
             <p className="text-xs text-gray-500 mb-4">
-                Scheduling for {selectedEmails.length} selected student(s).
-                An email invite with the Meet link and Calendar event will be sent to them automatically.
+                Scheduling for <span className="font-bold">{selectedEmails.length}</span> student(s).
+                A Calendar Invite will be sent to everyone.
             </p>
 
-            <div className="grid grid-cols-2 gap-4">
-                <Input type="date" label="Date" value={meetData.date} onChange={(v) => setMeetData({...meetData, date: v})} />
-                <Input type="time" label="Time" value={meetData.time} onChange={(v) => setMeetData({...meetData, time: v})} />
+            <Input type="date" label="Date" value={meetData.date} onChange={(v) => setMeetData({...meetData, date: v})} />
+
+            {/* TIME SELECTORS WITH AM/PM */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label className="text-xs text-gray-500 font-semibold mb-1 block">Start Time</label>
+                    <div className="flex gap-1">
+                        <select className="border rounded p-2 text-sm" value={meetData.startHour} onChange={(e) => setMeetData({...meetData, startHour: e.target.value})}>
+                            {[...Array(12)].map((_, i) => <option key={i} value={String(i+1).padStart(2,'0')}>{String(i+1).padStart(2,'0')}</option>)}
+                        </select>
+                        <span className="self-center">:</span>
+                        <select className="border rounded p-2 text-sm" value={meetData.startMinute} onChange={(e) => setMeetData({...meetData, startMinute: e.target.value})}>
+                            <option value="00">00</option>
+                            <option value="15">15</option>
+                            <option value="30">30</option>
+                            <option value="45">45</option>
+                        </select>
+                        <select className="border rounded p-2 text-sm" value={meetData.startPeriod} onChange={(e) => setMeetData({...meetData, startPeriod: e.target.value})}>
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label className="text-xs text-gray-500 font-semibold mb-1 block">End Time</label>
+                    <div className="flex gap-1">
+                        <select className="border rounded p-2 text-sm" value={meetData.endHour} onChange={(e) => setMeetData({...meetData, endHour: e.target.value})}>
+                            {[...Array(12)].map((_, i) => <option key={i} value={String(i+1).padStart(2,'0')}>{String(i+1).padStart(2,'0')}</option>)}
+                        </select>
+                        <span className="self-center">:</span>
+                        <select className="border rounded p-2 text-sm" value={meetData.endMinute} onChange={(e) => setMeetData({...meetData, endMinute: e.target.value})}>
+                            <option value="00">00</option>
+                            <option value="15">15</option>
+                            <option value="30">30</option>
+                            <option value="45">45</option>
+                        </select>
+                        <select className="border rounded p-2 text-sm" value={meetData.endPeriod} onChange={(e) => setMeetData({...meetData, endPeriod: e.target.value})}>
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             <Input 
@@ -432,7 +482,7 @@ export default function MyStudents() {
               </button>
               <button onClick={scheduleMeeting} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2">
                 <Calendar size={14} />
-                Schedule & Send Invites
+                Schedule & Send
               </button>
             </div>
           </div>

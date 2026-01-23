@@ -38,8 +38,7 @@ exports.getFloatedCourses = async (req, res) => {
         course_id, course_code, title, acad_session, capacity, department, status, credits,
         instructor:users!faculty_id ( full_name, email )
       `)
-      .eq("advisor_id", advisor_id) // Strict check: Only courses assigned to me
-      // Show PENDING, APPROVED, and REJECTED so advisor can see all history
+      .eq("advisor_id", advisor_id) 
       .in("status", ["PENDING_ADVISOR_APPROVAL", "APPROVED", "REJECTED"]);
 
     if (error) throw error;
@@ -55,7 +54,6 @@ exports.approveCourse = async (req, res) => {
   const { course_id, action, advisor_id } = req.body;
   
   try {
-    // 1. Fetch the course to verify ownership
     const { data: course } = await supabase
       .from("courses")
       .select("advisor_id, status")
@@ -64,22 +62,15 @@ exports.approveCourse = async (req, res) => {
 
     if (!course) return res.status(404).json({ error: "Course not found." });
 
-    // 2. Strict Security Check: Ensure the logged-in advisor owns this course request
     if (String(course.advisor_id) !== String(advisor_id)) {
       return res.status(403).json({ error: "Unauthorized: You are not the advisor for this instructor." });
     }
 
-    // 3. Determine New Status
     let newStatus = "";
-    if (action === "APPROVE") {
-        newStatus = "APPROVED";
-    } else if (action === "REJECT") {
-        newStatus = "REJECTED";
-    } else {
-        return res.status(400).json({ error: "Invalid action. Use APPROVE or REJECT." });
-    }
+    if (action === "APPROVE") newStatus = "APPROVED";
+    else if (action === "REJECT") newStatus = "REJECTED";
+    else return res.status(400).json({ error: "Invalid action." });
 
-    // 4. Update Database
     const { error } = await supabase
       .from("courses")
       .update({ status: newStatus })
@@ -98,7 +89,6 @@ exports.approveCourse = async (req, res) => {
    SECTION 2: STUDENT APPROVALS (Student -> Advisor)
 =================================================== */
 
-// A. Get "Union" of Courses
 exports.getAdvisorStudentCourses = async (req, res) => {
   const { advisor_id } = req.query;
 
@@ -118,7 +108,6 @@ exports.getAdvisorStudentCourses = async (req, res) => {
     const countMap = {};
 
     (data || []).forEach((row) => {
-      // Filter strictly for students assigned to this advisor
       if (row.student && String(row.student.advisor_id) === String(advisor_id) && row.course) {
         uniqueCourses[row.course.course_id] = row.course;
       }
@@ -149,7 +138,6 @@ exports.getAdvisorStudentCourses = async (req, res) => {
   }
 };
 
-// B. Get Students for a specific Course Card
 exports.getAdvisorStudentsForCourse = async (req, res) => {
   const { advisor_id, course_id } = req.query;
   try {
@@ -173,7 +161,6 @@ exports.getAdvisorStudentsForCourse = async (req, res) => {
   }
 };
 
-// C. Approve / Reject / Remove Student
 exports.approveByAdvisor = async (req, res) => {
   const { enrollmentId, action, advisor_id } = req.body;
 
@@ -230,9 +217,6 @@ exports.approveByAdvisor = async (req, res) => {
   }
 };
 
-// ==============================
-// GET ALL STUDENTS UNDER ADVISOR
-// ==============================
 exports.getAllAdvisorStudents = async (req, res) => {
   const { advisor_id } = req.query;
 
@@ -240,22 +224,14 @@ exports.getAllAdvisorStudents = async (req, res) => {
     const { data, error } = await supabase
       .from("users")
       .select(`
-        user_id,
-        full_name,
-        email,
-        department,
-        account_status,
-        student_profile (
-          entry_no,
-          batch
-        )
+        user_id, full_name, email, department, account_status,
+        student_profile ( entry_no, batch )
       `)
       .eq("advisor_id", advisor_id)
       .eq("role", "Student");
 
     if (error) throw error;
 
-    // Normalize response
     const students = (data || []).map(s => ({
       user_id: s.user_id,
       full_name: s.full_name,
@@ -273,29 +249,15 @@ exports.getAllAdvisorStudents = async (req, res) => {
   }
 };
 
-// ==================================================
-// GET FULL STUDENT DETAILS + COURSE HISTORY (FINAL)
-// ==================================================
 exports.getAdvisorStudentDetails = async (req, res) => {
   const { advisor_id, student_id } = req.query;
 
   try {
-    /* ============================
-       1️⃣ FETCH STUDENT BASIC INFO
-    ============================ */
     const { data: student, error: studentError } = await supabase
       .from("users")
       .select(`
-        user_id,
-        full_name,
-        email,
-        department,
-        advisor_id,
-        role,
-        student_profile (
-          entry_no,
-          batch
-        )
+        user_id, full_name, email, department, advisor_id, role,
+        student_profile ( entry_no, batch )
       `)
       .eq("user_id", student_id)
       .eq("role", "Student")
@@ -305,27 +267,15 @@ exports.getAdvisorStudentDetails = async (req, res) => {
       return res.status(404).json({ error: "Student not found." });
     }
 
-    // 🔐 Advisor ownership check
     if (String(student.advisor_id) !== String(advisor_id)) {
       return res.status(403).json({ error: "Unauthorized access." });
     }
 
-    /* ============================
-       2️⃣ FETCH ENROLLMENTS ONLY
-    ============================ */
-    const { data: enrollments, error: enrollError } = await supabase
+    const { data: enrollments } = await supabase
       .from("enrollments")
-      .select(`
-        enrollment_id,
-        course_id,
-        status,
-        grade,
-        updated_at
-      `)
+      .select(`enrollment_id, course_id, status, grade, updated_at`)
       .eq("student_id", student_id)
       .order("updated_at", { ascending: false });
-
-    if (enrollError) throw enrollError;
 
     if (!enrollments || enrollments.length === 0) {
       return res.json({
@@ -342,31 +292,14 @@ exports.getAdvisorStudentDetails = async (req, res) => {
       });
     }
 
-    /* ============================
-       3️⃣ FETCH COURSES SEPARATELY
-    ============================ */
     const courseIds = enrollments.map(e => e.course_id);
-
-    const { data: courses, error: courseError } = await supabase
+    const { data: courses } = await supabase
       .from("courses")
-      .select(`
-        course_id,
-        course_code,
-        title,
-        acad_session,
-        credits
-      `)
+      .select(`course_id, course_code, title, acad_session, credits`)
       .in("course_id", courseIds);
 
-    if (courseError) throw courseError;
-
-    /* ============================
-       4️⃣ MERGE DATA MANUALLY
-    ============================ */
     const courseMap = {};
-    (courses || []).forEach(c => {
-      courseMap[c.course_id] = c;
-    });
+    (courses || []).forEach(c => { courseMap[c.course_id] = c; });
 
     const merged = enrollments.map(e => ({
       enrollment_id: e.enrollment_id,
@@ -376,9 +309,6 @@ exports.getAdvisorStudentDetails = async (req, res) => {
       course: courseMap[e.course_id] || null
     }));
 
-    /* ============================
-       5️⃣ RESPONSE
-    ============================ */
     res.json({
       student: {
         user_id: student.user_id,
@@ -401,30 +331,24 @@ exports.getAdvisorStudentDetails = async (req, res) => {
 exports.sendEmailToStudent = async (req, res) => {
   const { advisor_id, to, subject, message, cc = [], bcc = [] } = req.body;
 
-  if (!advisor_id || !to || !subject || !message) {
-    return res.status(400).json({ error: "Missing required fields." });
-  }
-
   try {
-    // 🔐 Verify advisor
-    const { data: advisor, error } = await supabase
+    const { data: advisor } = await supabase
       .from("users")
-      .select("user_id")
+      .select("user_id, full_name, email")
       .eq("user_id", advisor_id)
       .eq("role", "Advisor")
       .single();
 
-    if (error || !advisor) {
-      return res.status(403).json({ error: "Unauthorized advisor." });
-    }
+    if (!advisor) return res.status(403).json({ error: "Unauthorized advisor." });
 
-    // 📧 Send email
     await sendCustomEmail({
       to,
       subject,
       text: message,
       cc,
       bcc,
+      replyTo: advisor.email,
+      from: `"${advisor.full_name}" <${process.env.EMAIL_USER}>`
     });
 
     res.json({ message: "Email sent successfully." });
@@ -436,13 +360,15 @@ exports.sendEmailToStudent = async (req, res) => {
 };
 
 /* ==================================================
-   SCHEDULE MEETING (Google Meet / Calendar)
-   - Sends invite to all selected students
+   SCHEDULE MEETING
+   - Generates .ics Invite
+   - Sends as Advisor
+   - Sends to ALL Students in TO field
 ================================================== */
 exports.scheduleMeeting = async (req, res) => {
-    const { advisor_id, student_emails, date, time, topic, meet_link, description } = req.body;
+    const { advisor_id, student_emails, date, start_time, end_time, topic, meet_link, description } = req.body;
   
-    if (!advisor_id || !student_emails || student_emails.length === 0 || !date || !time) {
+    if (!advisor_id || !student_emails || student_emails.length === 0 || !date || !start_time) {
       return res.status(400).json({ error: "Missing required meeting details." });
     }
   
@@ -450,60 +376,88 @@ exports.scheduleMeeting = async (req, res) => {
       // 1. Verify Advisor
       const { data: advisor, error } = await supabase
         .from("users")
-        .select("full_name")
+        .select("full_name, email")
         .eq("user_id", advisor_id)
         .eq("role", "Advisor")
         .single();
   
       if (error || !advisor) return res.status(403).json({ error: "Unauthorized." });
   
-      // 2. Format Dates for Google Calendar URL
-      // Google Calendar Date Format: YYYYMMDDTHHMMSSZ
-      const startDateTime = new Date(`${date}T${time}`);
-      const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // 1 Hour default
-  
-      const formatGCalDate = (dateObj) => {
-        return dateObj.toISOString().replace(/-|:|\.\d+/g, "");
+      // 2. Helper: Convert "HH:MM AM/PM" to Date Object
+      const parseTime = (dateStr, timeStr) => {
+        const [time, modifier] = timeStr.split(' ');
+        let [hours, minutes] = time.split(':');
+        if (hours === '12') hours = '00';
+        if (modifier === 'PM') hours = parseInt(hours, 10) + 12;
+        return new Date(`${dateStr}T${hours}:${minutes}:00`);
       };
-  
-      const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(topic)}&details=${encodeURIComponent(description || "")}+%0A%0AJoin+Meet:+${encodeURIComponent(meet_link)}&dates=${formatGCalDate(startDateTime)}/${formatGCalDate(endDateTime)}&location=Google+Meet`;
-  
-      // 3. Construct Email
-      const emailSubject = `[Meeting Invite] ${topic} - ${date} @ ${time}`;
+
+      const startDateTime = parseTime(date, start_time);
+      const endDateTime = end_time ? parseTime(date, end_time) : new Date(startDateTime.getTime() + 60 * 60 * 1000);
+
+      // 3. Generate .ics (Calendar Invite) Content
+      const formatICSDate = (d) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      const now = formatICSDate(new Date());
+      const start = formatICSDate(startDateTime);
+      const end = formatICSDate(endDateTime);
+
+      const icsContent = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//AIIMS//Advisor Portal//EN",
+        "METHOD:REQUEST",
+        "BEGIN:VEVENT",
+        `UID:${Date.now()}@aiims.portal`,
+        `DTSTAMP:${now}`,
+        `DTSTART:${start}`,
+        `DTEND:${end}`,
+        `SUMMARY:${topic}`,
+        `DESCRIPTION:${description || "Meeting with Advisor"}`,
+        `LOCATION:${meet_link}`,
+        `ORGANIZER;CN="${advisor.full_name}":mailto:${advisor.email}`,
+        "STATUS:CONFIRMED",
+        "END:VEVENT",
+        "END:VCALENDAR"
+      ].join("\r\n");
+
+      // 4. Construct Email Body
       const emailBody = `
         Dear Student,
-  
+
         Advisor ${advisor.full_name} has scheduled a meeting with you.
-  
+        Please check the attached calendar invitation or click the link below to join.
+
         Topic: ${topic}
         Date: ${date}
-        Time: ${time}
-        Description: ${description || "No description provided."}
-  
-        --------------------------------------------------
-        JOIN GOOGLE MEET:
-        ${meet_link}
-        --------------------------------------------------
-  
-        Add to Google Calendar:
-        ${gcalUrl}
-  
-        Please ensure you join on time.
-  
+        Time: ${start_time} - ${end_time}
+        Link: ${meet_link}
+
         Regards,
-        Academic Administration
+        ${advisor.full_name}
       `;
   
-      // 4. Send Email (Using BCC to avoid exposing all student emails to each other)
-      // Note: We send to the Advisor and BCC all students
+      // 5. Send Email with Attachment
+      //    - To: ALL Selected Students (So they see it in their inbox directly)
+      //    - Cc: Advisor (So they also get the invite)
+      //    - Reply-To: Advisor Email
+      
       await sendCustomEmail({
-        to: advisor.email || student_emails[0], // Fallback if advisor email not found
-        bcc: student_emails,
-        subject: emailSubject,
+        to: student_emails, // UPDATED: Sends directly to students list
+        cc: [advisor.email], // UPDATED: Advisor gets a copy
+        subject: `[Invitation] ${topic} @ ${start_time}`,
         text: emailBody,
+        replyTo: advisor.email, 
+        from: `"${advisor.full_name}" <${process.env.EMAIL_USER}>`, 
+        attachments: [
+            {
+                filename: "invite.ics",
+                content: icsContent,
+                contentType: "text/calendar; method=REQUEST"
+            }
+        ]
       });
   
-      res.json({ message: "Meeting scheduled and invites sent." });
+      res.json({ message: "Meeting scheduled. Invites sent." });
   
     } catch (err) {
       console.error("SCHEDULE MEETING ERROR:", err);
