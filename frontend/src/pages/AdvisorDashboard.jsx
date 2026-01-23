@@ -3,7 +3,8 @@ import AdvisorApprovals from "./advisor/AdvisorApprovals";
 import CourseApprovals from "./advisor/CourseApprovals";
 import AllCourses from "./advisor/AllCourses";
 import AdvisorProfile from "./advisor/AdvisorProfile";
-import AcademicEvents from "./advisor/AcademicEvents"; // ✅ NEW IMPORT
+import AcademicEvents from "./advisor/AcademicEvents";
+import MyStudents from "./advisor/MyStudents"; // ✅ NEW IMPORT
 
 export default function AdvisorDashboard() {
   const [activeTab, setActiveTab] = useState("students");
@@ -24,39 +25,28 @@ export default function AdvisorDashboard() {
           </h1>
 
           <div className="flex flex-col mt-4">
-            <NavBtn
-              active={activeTab === "students"}
-              onClick={() => setActiveTab("students")}
-            >
+            <NavBtn active={activeTab === "students"} onClick={() => setActiveTab("students")}>
               Student Approvals
             </NavBtn>
 
-            <NavBtn
-              active={activeTab === "courses"}
-              onClick={() => setActiveTab("courses")}
-            >
+            <NavBtn active={activeTab === "courses"} onClick={() => setActiveTab("courses")}>
               Course Approvals
             </NavBtn>
 
-            <NavBtn
-              active={activeTab === "all-courses"}
-              onClick={() => setActiveTab("all-courses")}
-            >
+            <NavBtn active={activeTab === "all-courses"} onClick={() => setActiveTab("all-courses")}>
               All Offerings
             </NavBtn>
 
             {/* ✅ NEW TAB */}
-            <NavBtn
-              active={activeTab === "events"}
-              onClick={() => setActiveTab("events")}
-            >
+            <NavBtn active={activeTab === "my-students"} onClick={() => setActiveTab("my-students")}>
+              My Students
+            </NavBtn>
+
+            <NavBtn active={activeTab === "events"} onClick={() => setActiveTab("events")}>
               Academic Events
             </NavBtn>
 
-            <NavBtn
-              active={activeTab === "profile"}
-              onClick={() => setActiveTab("profile")}
-            >
+            <NavBtn active={activeTab === "profile"} onClick={() => setActiveTab("profile")}>
               Profile
             </NavBtn>
           </div>
@@ -80,7 +70,8 @@ export default function AdvisorDashboard() {
         {activeTab === "students" && <AdvisorApprovals />}
         {activeTab === "courses" && <CourseApprovals />}
         {activeTab === "all-courses" && <AllCourses />}
-        {activeTab === "events" && <AcademicEvents />} {/* ✅ NEW */}
+        {activeTab === "my-students" && <MyStudents />} {/* ✅ */}
+        {activeTab === "events" && <AcademicEvents />}
         {activeTab === "profile" && <AdvisorProfile />}
       </main>
     </div>

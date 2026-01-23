@@ -10,5 +10,9 @@ router.post('/approve-course', advisorController.approveCourse);     // Handles 
 router.get('/student-courses', advisorController.getAdvisorStudentCourses); // The "Union" list
 router.get('/course-students', advisorController.getAdvisorStudentsForCourse); // Students for a card
 router.post('/approve-student', advisorController.approveByAdvisor); // Accept/Reject/Remove
+// advisorRoutes.js
+router.get("/all-students", advisorController.getAllAdvisorStudents);
+router.get("/student-details", advisorController.getAdvisorStudentDetails);
+
 
 module.exports = router;

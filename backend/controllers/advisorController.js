@@ -228,3 +228,176 @@ exports.approveByAdvisor = async (req, res) => {
     res.status(500).json({ error: "Action failed." });
   }
 };
+
+// ==============================
+// GET ALL STUDENTS UNDER ADVISOR
+// ==============================
+// ==========================================
+// GET ALL STUDENTS UNDER AN ADVISOR (LIST)
+// ==========================================
+exports.getAllAdvisorStudents = async (req, res) => {
+  const { advisor_id } = req.query;
+
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select(`
+        user_id,
+        full_name,
+        email,
+        department,
+        account_status,
+        student_profile (
+          entry_no,
+          batch
+        )
+      `)
+      .eq("advisor_id", advisor_id)
+      .eq("role", "Student");
+
+    if (error) throw error;
+
+    // Normalize response
+    const students = (data || []).map(s => ({
+      user_id: s.user_id,
+      full_name: s.full_name,
+      email: s.email,
+      department: s.department,
+      account_status: s.account_status,
+      entry_no: s.student_profile?.entry_no || null,
+      batch: s.student_profile?.batch || null
+    }));
+
+    res.json(students);
+  } catch (err) {
+    console.error("GET ALL ADVISOR STUDENTS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch students." });
+  }
+};
+// ==================================================
+// GET FULL STUDENT DETAILS + COURSE HISTORY
+// ==================================================
+// ==================================================
+// GET FULL STUDENT DETAILS + COURSE HISTORY (FINAL)
+// ==================================================
+exports.getAdvisorStudentDetails = async (req, res) => {
+  const { advisor_id, student_id } = req.query;
+
+  try {
+    /* ============================
+       1️⃣ FETCH STUDENT BASIC INFO
+    ============================ */
+    const { data: student, error: studentError } = await supabase
+      .from("users")
+      .select(`
+        user_id,
+        full_name,
+        email,
+        department,
+        advisor_id,
+        role,
+        student_profile (
+          entry_no,
+          batch
+        )
+      `)
+      .eq("user_id", student_id)
+      .eq("role", "Student")
+      .single();
+
+    if (studentError || !student) {
+      return res.status(404).json({ error: "Student not found." });
+    }
+
+    // 🔐 Advisor ownership check
+    if (String(student.advisor_id) !== String(advisor_id)) {
+      return res.status(403).json({ error: "Unauthorized access." });
+    }
+
+    /* ============================
+       2️⃣ FETCH ENROLLMENTS ONLY
+    ============================ */
+    const { data: enrollments, error: enrollError } = await supabase
+      .from("enrollments")
+      .select(`
+        enrollment_id,
+        course_id,
+        status,
+        grade,
+        updated_at
+      `)
+      .eq("student_id", student_id)
+      .order("updated_at", { ascending: false });
+
+    if (enrollError) throw enrollError;
+
+    if (!enrollments || enrollments.length === 0) {
+      return res.json({
+        student: {
+          user_id: student.user_id,
+          full_name: student.full_name,
+          email: student.email,
+          department: student.department,
+          entry_no: student.student_profile?.entry_no || null,
+          batch: student.student_profile?.batch || null,
+          role: student.role
+        },
+        courses: []
+      });
+    }
+
+    /* ============================
+       3️⃣ FETCH COURSES SEPARATELY
+    ============================ */
+    const courseIds = enrollments.map(e => e.course_id);
+
+    const { data: courses, error: courseError } = await supabase
+      .from("courses")
+      .select(`
+        course_id,
+        course_code,
+        title,
+        acad_session,
+        credits
+      `)
+      .in("course_id", courseIds);
+
+    if (courseError) throw courseError;
+
+    /* ============================
+       4️⃣ MERGE DATA MANUALLY
+    ============================ */
+    const courseMap = {};
+    (courses || []).forEach(c => {
+      courseMap[c.course_id] = c;
+    });
+
+    const merged = enrollments.map(e => ({
+      enrollment_id: e.enrollment_id,
+      status: e.status,
+      grade: e.grade,
+      updated_at: e.updated_at,
+      course: courseMap[e.course_id] || null
+    }));
+
+    /* ============================
+       5️⃣ RESPONSE
+    ============================ */
+    res.json({
+      student: {
+        user_id: student.user_id,
+        full_name: student.full_name,
+        email: student.email,
+        department: student.department,
+        entry_no: student.student_profile?.entry_no || null,
+        batch: student.student_profile?.batch || null,
+        role: student.role
+      },
+      courses: merged
+    });
+
+  } catch (err) {
+    console.error("GET STUDENT DETAILS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch student details." });
+  }
+};
