@@ -233,9 +233,6 @@ exports.approveByAdvisor = async (req, res) => {
 // ==============================
 // GET ALL STUDENTS UNDER ADVISOR
 // ==============================
-// ==========================================
-// GET ALL STUDENTS UNDER AN ADVISOR (LIST)
-// ==========================================
 exports.getAllAdvisorStudents = async (req, res) => {
   const { advisor_id } = req.query;
 
@@ -275,9 +272,7 @@ exports.getAllAdvisorStudents = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch students." });
   }
 };
-// ==================================================
-// GET FULL STUDENT DETAILS + COURSE HISTORY
-// ==================================================
+
 // ==================================================
 // GET FULL STUDENT DETAILS + COURSE HISTORY (FINAL)
 // ==================================================
@@ -402,6 +397,7 @@ exports.getAdvisorStudentDetails = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch student details." });
   }
 };
+
 exports.sendEmailToStudent = async (req, res) => {
   const { advisor_id, to, subject, message, cc = [], bcc = [] } = req.body;
 
@@ -438,3 +434,79 @@ exports.sendEmailToStudent = async (req, res) => {
     res.status(500).json({ error: "Failed to send email." });
   }
 };
+
+/* ==================================================
+   SCHEDULE MEETING (Google Meet / Calendar)
+   - Sends invite to all selected students
+================================================== */
+exports.scheduleMeeting = async (req, res) => {
+    const { advisor_id, student_emails, date, time, topic, meet_link, description } = req.body;
+  
+    if (!advisor_id || !student_emails || student_emails.length === 0 || !date || !time) {
+      return res.status(400).json({ error: "Missing required meeting details." });
+    }
+  
+    try {
+      // 1. Verify Advisor
+      const { data: advisor, error } = await supabase
+        .from("users")
+        .select("full_name")
+        .eq("user_id", advisor_id)
+        .eq("role", "Advisor")
+        .single();
+  
+      if (error || !advisor) return res.status(403).json({ error: "Unauthorized." });
+  
+      // 2. Format Dates for Google Calendar URL
+      // Google Calendar Date Format: YYYYMMDDTHHMMSSZ
+      const startDateTime = new Date(`${date}T${time}`);
+      const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // 1 Hour default
+  
+      const formatGCalDate = (dateObj) => {
+        return dateObj.toISOString().replace(/-|:|\.\d+/g, "");
+      };
+  
+      const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(topic)}&details=${encodeURIComponent(description || "")}+%0A%0AJoin+Meet:+${encodeURIComponent(meet_link)}&dates=${formatGCalDate(startDateTime)}/${formatGCalDate(endDateTime)}&location=Google+Meet`;
+  
+      // 3. Construct Email
+      const emailSubject = `[Meeting Invite] ${topic} - ${date} @ ${time}`;
+      const emailBody = `
+        Dear Student,
+  
+        Advisor ${advisor.full_name} has scheduled a meeting with you.
+  
+        Topic: ${topic}
+        Date: ${date}
+        Time: ${time}
+        Description: ${description || "No description provided."}
+  
+        --------------------------------------------------
+        JOIN GOOGLE MEET:
+        ${meet_link}
+        --------------------------------------------------
+  
+        Add to Google Calendar:
+        ${gcalUrl}
+  
+        Please ensure you join on time.
+  
+        Regards,
+        Academic Administration
+      `;
+  
+      // 4. Send Email (Using BCC to avoid exposing all student emails to each other)
+      // Note: We send to the Advisor and BCC all students
+      await sendCustomEmail({
+        to: advisor.email || student_emails[0], // Fallback if advisor email not found
+        bcc: student_emails,
+        subject: emailSubject,
+        text: emailBody,
+      });
+  
+      res.json({ message: "Meeting scheduled and invites sent." });
+  
+    } catch (err) {
+      console.error("SCHEDULE MEETING ERROR:", err);
+      res.status(500).json({ error: "Failed to schedule meeting." });
+    }
+  };

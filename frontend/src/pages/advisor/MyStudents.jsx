@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
-import { Mail } from "lucide-react";
+import { Mail, Video, Calendar, CheckSquare, Square } from "lucide-react";
 
 export default function MyStudents() {
   const user = JSON.parse(sessionStorage.getItem("user"));
@@ -13,7 +13,10 @@ export default function MyStudents() {
   const [department, setDepartment] = useState("");
   const [loading, setLoading] = useState(false);
 
-  /* ============ MAIL MODAL STATE ============ */
+  /* ============ SELECTION STATE ============ */
+  const [selectedEmails, setSelectedEmails] = useState([]);
+
+  /* ============ MODAL STATES ============ */
   const [showMail, setShowMail] = useState(false);
   const [mailData, setMailData] = useState({
     to: "",
@@ -21,6 +24,15 @@ export default function MyStudents() {
     bcc: "",
     subject: "",
     message: "",
+  });
+
+  const [showMeet, setShowMeet] = useState(false);
+  const [meetData, setMeetData] = useState({
+    date: "",
+    time: "",
+    topic: "",
+    link: "", // Instructor can paste their personal room or generated link
+    description: ""
   });
 
   /* ================= FETCH STUDENTS ================= */
@@ -74,20 +86,76 @@ export default function MyStudents() {
     ...new Set(students.map((s) => s.department).filter(Boolean)),
   ];
 
-  /* ================= SEND MAIL ================= */
+  /* ================= SELECTION LOGIC ================= */
+
+  const toggleSelectAll = () => {
+    if (selectedEmails.length === filtered.length) {
+      setSelectedEmails([]);
+    } else {
+      setSelectedEmails(filtered.map(s => s.email));
+    }
+  };
+
+  const toggleStudent = (email) => {
+    if (selectedEmails.includes(email)) {
+      setSelectedEmails(selectedEmails.filter(e => e !== email));
+    } else {
+      setSelectedEmails([...selectedEmails, email]);
+    }
+  };
+
+  /* ================= ACTIONS ================= */
 
   const sendMail = async () => {
-    await api.post("/advisor/send-student-email", {
-      advisor_id: user.id,
-      to: mailData.to,
-      cc: mailData.cc.split(",").filter(Boolean),
-      bcc: mailData.bcc.split(",").filter(Boolean),
-      subject: mailData.subject,
-      message: mailData.message,
-    });
+    try {
+      await api.post("/advisor/send-student-email", {
+        advisor_id: user.id,
+        to: mailData.to,
+        cc: mailData.cc.split(",").filter(Boolean),
+        bcc: mailData.bcc.split(",").filter(Boolean),
+        subject: mailData.subject,
+        message: mailData.message,
+      });
 
-    alert("Mail sent successfully");
-    setShowMail(false);
+      alert("Mail sent successfully");
+      setShowMail(false);
+    } catch (error) {
+      alert("Failed to send mail");
+    }
+  };
+
+  const scheduleMeeting = async () => {
+    if (!meetData.date || !meetData.time || !meetData.topic) {
+      alert("Please fill in Date, Time and Topic");
+      return;
+    }
+
+    // Use selected students OR all filtered if none selected (optional logic, sticking to explicit selection here)
+    const targets = selectedEmails.length > 0 ? selectedEmails : [];
+    
+    if (targets.length === 0) {
+      alert("Please select at least one student to schedule a meeting.");
+      return;
+    }
+
+    try {
+      await api.post("/advisor/schedule-meeting", {
+        advisor_id: user.id,
+        student_emails: targets,
+        date: meetData.date,
+        time: meetData.time,
+        topic: meetData.topic,
+        meet_link: meetData.link || "https://meet.google.com/new", // Default to new if empty
+        description: meetData.description
+      });
+
+      alert("Meeting scheduled! Invites sent to students.");
+      setShowMeet(false);
+      setSelectedEmails([]); // Clear selection
+    } catch (error) {
+      console.error(error);
+      alert("Failed to schedule meeting.");
+    }
   };
 
   /* ================= UI ================= */
@@ -98,7 +166,24 @@ export default function MyStudents() {
       {/* ================= LIST VIEW ================= */}
       {!selectedStudent && (
         <>
-          <h2 className="text-2xl font-bold mb-4">My Students</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">My Students</h2>
+            
+            {/* ORGANIZE MEET BUTTON */}
+            <button
+              onClick={() => {
+                if(selectedEmails.length === 0) {
+                    alert("Select students from the list first!");
+                    return;
+                }
+                setShowMeet(true);
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 text-sm hover:bg-blue-700 transition"
+            >
+              <Video size={16} />
+              Organize a Meet ({selectedEmails.length})
+            </button>
+          </div>
 
           <div className="grid md:grid-cols-3 gap-3 mb-4">
             <input
@@ -127,6 +212,16 @@ export default function MyStudents() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-100">
                   <tr>
+                    {/* SELECT ALL CHECKBOX */}
+                    <th className="px-4 py-3 w-10">
+                        <button onClick={toggleSelectAll} className="text-gray-600 hover:text-black">
+                            {filtered.length > 0 && selectedEmails.length === filtered.length ? (
+                                <CheckSquare size={18} className="text-blue-600"/>
+                            ) : (
+                                <Square size={18}/>
+                            )}
+                        </button>
+                    </th>
                     <th className="px-4 py-3 text-left">Student</th>
                     <th className="px-4 py-3">Entry No</th>
                     <th className="px-4 py-3">Department</th>
@@ -135,42 +230,51 @@ export default function MyStudents() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((s) => (
-                    <tr key={s.user_id} className="border-t hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">{s.full_name}</td>
-                      <td className="px-4 py-3">{s.entry_no || "—"}</td>
-                      <td className="px-4 py-3">{s.department}</td>
-                      <td className="px-4 py-3 text-xs">{s.email}</td>
+                  {filtered.map((s) => {
+                    const isSelected = selectedEmails.includes(s.email);
+                    return (
+                        <tr key={s.user_id} className={`border-t ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                        {/* INDIVIDUAL CHECKBOX */}
+                        <td className="px-4 py-3 text-center">
+                            <button onClick={() => toggleStudent(s.email)} className="text-gray-500 hover:text-blue-600">
+                                {isSelected ? <CheckSquare size={18} className="text-blue-600"/> : <Square size={18}/>}
+                            </button>
+                        </td>
+                        <td className="px-4 py-3 font-medium">{s.full_name}</td>
+                        <td className="px-4 py-3">{s.entry_no || "—"}</td>
+                        <td className="px-4 py-3">{s.department}</td>
+                        <td className="px-4 py-3 text-xs">{s.email}</td>
 
-                      <td className="px-4 py-3 text-right flex gap-2 justify-end">
-                        {/* MAIL */}
-                        <button
-                          onClick={() => {
-                            setMailData({
-                              to: s.email,
-                              cc: "",
-                              bcc: "",
-                              subject: "",
-                              message: "",
-                            });
-                            setShowMail(true);
-                          }}
-                          className="border p-2 rounded hover:bg-gray-100"
-                          title="Send Mail"
-                        >
-                          <Mail size={14} />
-                        </button>
+                        <td className="px-4 py-3 text-right flex gap-2 justify-end">
+                            {/* MAIL */}
+                            <button
+                            onClick={() => {
+                                setMailData({
+                                to: s.email,
+                                cc: "",
+                                bcc: "",
+                                subject: "",
+                                message: "",
+                                });
+                                setShowMail(true);
+                            }}
+                            className="border p-2 rounded hover:bg-gray-100"
+                            title="Send Mail"
+                            >
+                            <Mail size={14} />
+                            </button>
 
-                        {/* VIEW DETAILS */}
-                        <button
-                          onClick={() => fetchStudentDetails(s)}
-                          className="border px-3 py-1 text-xs rounded hover:bg-gray-100"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                            {/* VIEW DETAILS */}
+                            <button
+                            onClick={() => fetchStudentDetails(s)}
+                            className="border px-3 py-1 text-xs rounded hover:bg-gray-100"
+                            >
+                            View Details
+                            </button>
+                        </td>
+                        </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -280,6 +384,61 @@ export default function MyStudents() {
         </div>
       )}
 
+      {/* ================= MEET SCHEDULER MODAL ================= */}
+      {showMeet && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-full max-w-lg p-6 shadow-xl">
+            <div className="flex items-center gap-2 mb-4 text-blue-700">
+                <Video size={24} />
+                <h3 className="font-bold text-lg">Organize a Google Meet</h3>
+            </div>
+            
+            <p className="text-xs text-gray-500 mb-4">
+                Scheduling for {selectedEmails.length} selected student(s).
+                An email invite with the Meet link and Calendar event will be sent to them automatically.
+            </p>
+
+            <div className="grid grid-cols-2 gap-4">
+                <Input type="date" label="Date" value={meetData.date} onChange={(v) => setMeetData({...meetData, date: v})} />
+                <Input type="time" label="Time" value={meetData.time} onChange={(v) => setMeetData({...meetData, time: v})} />
+            </div>
+
+            <Input 
+                label="Topic" 
+                value={meetData.topic} 
+                onChange={(v) => setMeetData({...meetData, topic: v})} 
+                placeholder="e.g., Weekly Project Update"
+            />
+
+            <Input 
+                label="Google Meet Link (Optional)" 
+                value={meetData.link} 
+                onChange={(v) => setMeetData({...meetData, link: v})} 
+                placeholder="e.g. meet.google.com/abc-defg-hij"
+            />
+            <p className="text-[10px] text-gray-400 -mt-2 mb-3">Leave empty to suggest generating one, or paste your Personal Room link.</p>
+
+            <textarea
+              rows={3}
+              placeholder="Description / Agenda"
+              className="border rounded w-full px-3 py-2 text-sm mb-4"
+              value={meetData.description}
+              onChange={(e) => setMeetData({ ...meetData, description: e.target.value })}
+            />
+
+            <div className="flex justify-end gap-3 border-t pt-4">
+              <button onClick={() => setShowMeet(false)} className="border px-4 py-2 rounded hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={scheduleMeeting} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2">
+                <Calendar size={14} />
+                Schedule & Send Invites
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -306,14 +465,16 @@ function Status({ status }) {
   return <span className={cls}>{status.replace(/_/g, " ")}</span>;
 }
 
-function Input({ label, value, onChange, disabled }) {
+function Input({ label, value, onChange, disabled, type = "text", placeholder }) {
   return (
     <div className="mb-3">
-      <label className="text-xs text-gray-500">{label}</label>
+      <label className="text-xs text-gray-500 font-semibold">{label}</label>
       <input
-        className="border rounded w-full px-3 py-2 text-sm"
+        type={type}
+        className="border rounded w-full px-3 py-2 text-sm focus:outline-blue-500"
         value={value}
         disabled={disabled}
+        placeholder={placeholder}
         onChange={(e) => onChange?.(e.target.value)}
       />
     </div>

@@ -10,11 +10,13 @@ router.post('/approve-course', advisorController.approveCourse);     // Handles 
 router.get('/student-courses', advisorController.getAdvisorStudentCourses); // The "Union" list
 router.get('/course-students', advisorController.getAdvisorStudentsForCourse); // Students for a card
 router.post('/approve-student', advisorController.approveByAdvisor); // Accept/Reject/Remove
-// advisorRoutes.js
+
+// Student Management Routes
 router.get("/all-students", advisorController.getAllAdvisorStudents);
 router.get("/student-details", advisorController.getAdvisorStudentDetails);
 router.post("/send-student-email", advisorController.sendEmailToStudent);
 
-
+// Meeting Route
+router.post("/schedule-meeting", advisorController.scheduleMeeting);
 
 module.exports = router;
