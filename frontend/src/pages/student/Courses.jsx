@@ -4,6 +4,7 @@ import api from "../../services/api";
 export default function Courses() {
   const [courses, setCourses] = useState([]);
   const [appliedMap, setAppliedMap] = useState({});
+  const [departments, setDepartments] = useState([]);
   const [search, setSearch] = useState({
     code: "",
     dept: "",
@@ -29,6 +30,18 @@ export default function Courses() {
   // CHANGED: sessionStorage -> localStorage
   const user = JSON.parse(localStorage.getItem("user"));
   const CURRENT_SESSION = "2025-II";
+
+  // Fetch unique departments from all courses
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const coursesRes = await api.get("/courses/search", { params: { session: CURRENT_SESSION } });
+      const allCourses = Array.isArray(coursesRes.data) ? coursesRes.data : [];
+      const uniqueDepts = [...new Set(allCourses.map(c => c.department).filter(Boolean))].sort();
+      setDepartments(uniqueDepts);
+    } catch (err) {
+      console.error("Failed to fetch departments:", err);
+    }
+  }, []);
 
   // Fetch approved courses
   const fetchData = useCallback(async () => {
@@ -62,8 +75,9 @@ setAppliedMap(mapping);
   }, [user?.id, search]);
 
   useEffect(() => {
+    fetchDepartments();
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, fetchDepartments]);
 
   // Handle input changes
   const handleChange = (e) => {
@@ -184,7 +198,12 @@ setAppliedMap(mapping);
       <div className="bg-white p-4 rounded-lg shadow border mb-6 grid grid-cols-2 md:grid-cols-5 gap-3">
         <input name="code" placeholder="Course Code" className="border p-2 rounded text-sm" value={search.code} onChange={handleChange} />
         <input name="title" placeholder="Course Title" className="border p-2 rounded text-sm" value={search.title} onChange={handleChange} />
-        <input name="dept" placeholder="Department" className="border p-2 rounded text-sm" value={search.dept} onChange={handleChange} />
+        <select name="dept" className="border p-2 rounded text-sm" value={search.dept} onChange={handleChange}>
+          <option value="">All Departments</option>
+          {departments.map(dept => (
+            <option key={dept} value={dept}>{dept}</option>
+          ))}
+        </select>
         <input name="instructor" placeholder="Instructor Name" className="border p-2 rounded text-sm" value={search.instructor} onChange={handleChange} />
         <select name="session" className="border p-2 rounded text-sm" value={search.session} onChange={handleChange}>
           <option value="2025-II">2025-II</option>
@@ -229,15 +248,15 @@ setAppliedMap(mapping);
 
                   {canApply && (
                     <button onClick={(e) => { e.stopPropagation(); apply(c.course_id); }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm transition">
+                      className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-1 rounded text-sm transition font-semibold border border-blue-200">
                       Enroll
                     </button>
                   )}
 
                   {canDrop && (
                     <button onClick={(e) => { e.stopPropagation(); drop(enrollment.enrollment_id); }}
-                      className="border border-red-600 text-red-600 hover:bg-red-50 px-4 py-1 rounded text-sm transition">
-                      Drop Course
+                      className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-1 rounded text-sm transition font-semibold border border-red-200">
+                      Drop
                     </button>
                   )}
                 </div>
@@ -301,7 +320,7 @@ setAppliedMap(mapping);
                     {canApply && (
                       <button 
                         onClick={() => apply(selectedCourse.course_id)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded transition font-semibold"
+                        className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-6 py-2 rounded transition font-semibold border border-blue-200"
                       >
                         Enroll Now
                       </button>
@@ -309,7 +328,7 @@ setAppliedMap(mapping);
                     {canDrop && (
                       <button 
                         onClick={() => drop(enrollment.enrollment_id)}
-                        className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 px-6 py-2 rounded transition font-semibold"
+                        className="bg-red-100 hover:bg-red-200 text-red-700 px-6 py-2 rounded transition font-semibold border border-red-200"
                       >
                         Drop Course
                       </button>
