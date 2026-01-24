@@ -206,16 +206,11 @@ exports.verifySignupOTP = async (req, res) => {
 
     if (!record) return res.status(401).json({ error: "Invalid OTP." });
 
-    let advisorId = null;
-    if (role === "Student" || role === "Instructor") {
-      advisorId = await findLeastLoadedAdvisor(department);
-    }
-
     const { data: user, error } = await supabase
       .from('users')
       .insert([{
         email, full_name, role, department,
-        advisor_id: advisorId,
+        advisor_id: null,
         account_status: 'PENDING'
       }])
       .select()
