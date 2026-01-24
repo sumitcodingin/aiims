@@ -7,7 +7,7 @@ export default function StudentTimetable() {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("personal"); // "generic" or "personal"
 
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user")) || { id: "default" };
   const CURRENT_SESSION = "2025-II";
 
   // Time slots
@@ -96,18 +96,9 @@ export default function StudentTimetable() {
       })
       .then((res) => {
         const data = res.data.records || res.data;
-        console.log("✅ Timetable data:", data);
-        
-        // Filter only ENROLLED courses
         const enrolledCourses = (Array.isArray(data) ? data : []).filter(
           (r) => r.status === "ENROLLED"
         );
-        
-        console.log("✅ Enrolled courses:", enrolledCourses);
-        enrolledCourses.forEach((c) => {
-          console.log("📍 Course:", c.courses?.course_code, "Slot:", c.courses?.slot);
-        });
-        
         setEnrolled(enrolledCourses);
       })
       .catch((err) => {
@@ -117,279 +108,164 @@ export default function StudentTimetable() {
       .finally(() => setLoading(false));
   }, [user.id]);
 
-  // Get course at specific day and time (for personal timetable)
   const getStudentCourseAtSlot = (day, timeValue) => {
-    // Skip lunch break
     if (timeValue === "lunch") return null;
-    
     const slotKey = `${day}-${timeValue}`;
-    
-    // Find any enrolled course that has a slot matching this day-time position
-    const course = enrolled.find((course) => {
+    return enrolled.find((course) => {
       const studentSlot = course.courses?.slot;
-      if (!studentSlot) {
-        console.warn("Course has no slot:", course.courses?.course_code);
-        return false;
-      }
-      
-      // Look up what slot code should be at this day-time
+      if (!studentSlot) return false;
       const expectedSlotAtThisTime = GENERIC_TIMETABLE[slotKey];
-      
-      // Check if the course's slot matches (handle lab slots)
       const baseSlot = studentSlot.split(" ")[0];
       const expectedBaseSlot = expectedSlotAtThisTime?.split(" ")[0];
-      
-      const matches = baseSlot === expectedBaseSlot;
-      
-      if (matches) {
-        console.log(`✅ Found ${course.courses?.course_code} (Slot: ${studentSlot}) at ${slotKey}`);
-      }
-      
-      return matches;
+      return baseSlot === expectedBaseSlot;
     });
-    
-    return course;
   };
 
   if (loading) {
-    return <p className="text-gray-600">Loading timetable...</p>;
+    return <div className="p-10 font-sans text-gray-500 italic">Loading academic records...</div>;
   }
 
   if (error) {
-    return <p className="text-red-600">{error}</p>;
+    return <div className="p-10 text-red-600 font-bold">{error}</div>;
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6">� Timetable</h2>
-
-      {/* Summary Card */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6 rounded-lg shadow-lg mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="text-sm opacity-90">Enrolled Courses</p>
-            <p className="text-3xl font-bold">{enrolled.length}</p>
-          </div>
-          <div>
-            <p className="text-sm opacity-90">Session</p>
-            <p className="text-xl font-bold">{CURRENT_SESSION}</p>
-          </div>
-          <div>
-            <p className="text-sm opacity-90">Status</p>
-            <p className="text-xl font-bold">Active</p>
-          </div>
-        </div>
+    <div className="max-w-[1200px] mx-auto p-4 md:p-8 font-sans bg-white min-h-screen text-slate-900">
+      
+      {/* Header Section - Matching Screenshot Layout */}
+      <div className="relative text-center mb-10 border-b pb-6 border-slate-200">
+        <h1 className="text-2xl font-bold uppercase tracking-wide">INDIAN INSTITUTE OF TECHNOLOGY ROPAR</h1>
+        <h2 className="text-lg font-semibold mt-1">
+          Academic Timetable {CURRENT_SESSION} for UG / PG / PhD (continuing batch)
+        </h2>
+        
+        {/* Mock Download Button to match Screenshot */}
+        <button className="absolute right-0 top-0 bg-[#2d3436] text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-slate-700 transition">
+          Download PDF
+        </button>
       </div>
 
-      {/* View Mode Selector */}
-      <div className="mb-6 flex gap-3">
-        <button
-          onClick={() => setViewMode("generic")}
-          className={`px-6 py-2 rounded-lg font-semibold transition ${
-            viewMode === "generic"
-              ? "bg-blue-600 text-white shadow-md"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-          }`}
-        >
-          📋 General Timetable
-        </button>
+      {/* Navigation Toggles - Styled to match Instructor Portal tone */}
+      <div className="flex gap-1 mb-8 bg-slate-100 p-1 rounded w-fit">
         <button
           onClick={() => setViewMode("personal")}
-          className={`px-6 py-2 rounded-lg font-semibold transition ${
+          className={`px-6 py-2 text-xs font-bold uppercase tracking-wider transition ${
             viewMode === "personal"
-              ? "bg-blue-600 text-white shadow-md"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-500 hover:text-slate-800"
           }`}
         >
-          📅 My Timetable
+          My Timetable
+        </button>
+        <button
+          onClick={() => setViewMode("generic")}
+          className={`px-6 py-2 text-xs font-bold uppercase tracking-wider transition ${
+            viewMode === "generic"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          General Template
         </button>
       </div>
 
-      {/* ============================================================ */}
-      {/* GENERIC TIMETABLE (Template) */}
-      {/* ============================================================ */}
-      {viewMode === "generic" && (
-        <div>
-          <div className="mb-4">
-            <h3 className="text-lg font-bold text-gray-800">IIT Ropar General Timetable</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Standard timetable structure showing all available time slots and room codes. <span className="font-semibold">(Tut) = Tutorial Slot</span>
-            </p>
-          </div>
-          <div className="bg-white rounded-lg shadow-lg overflow-x-auto border border-blue-200">
-            <table className="w-full border-collapse text-sm">
-              {/* Header */}
-              <thead>
-                <tr>
-                  <th className="bg-gray-900 text-white p-3 text-left font-semibold border">Timings</th>
-                  {DAYS.map((day) => (
-                    <th key={day} className="bg-blue-600 text-white p-3 text-center font-semibold border">
-                      {day}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+      {/* Table Content */}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse border border-slate-800 text-sm">
+          <thead>
+            <tr>
+              <th className="border border-slate-800 p-3 bg-slate-50 text-left font-bold uppercase tracking-tighter w-40">
+                Timings
+              </th>
+              {DAYS.map((day) => (
+                <th key={day} className="border border-slate-800 p-3 bg-slate-50 text-center font-bold uppercase tracking-tight">
+                  {day}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {TIMES.map((timeObj) => (
+              <tr key={timeObj.value} className={timeObj.value === "lunch" ? "bg-slate-50" : ""}>
+                {/* Time slot column */}
+                <td className={`border border-slate-800 p-3 font-semibold text-xs whitespace-nowrap ${
+                  timeObj.isTutorial ? "italic text-slate-600" : ""
+                }`}>
+                  {timeObj.label}
+                  {timeObj.isTutorial && <div className="text-[10px] text-orange-700 font-bold not-italic">TUTORIAL</div>}
+                </td>
 
-              {/* Body */}
-              <tbody>
-                {TIMES.map((timeObj) => (
-                  <tr key={timeObj.value}>
-                    {/* Time slot column */}
-                    <td className={`p-3 font-semibold border text-left whitespace-nowrap ${
-                      timeObj.isTutorial ? "bg-orange-50" : "bg-gray-100"
-                    }`}>
-                      <span className="text-xs md:text-sm">
-                        {timeObj.label}
-                        {timeObj.isTutorial && <span className="text-orange-600 font-bold"> (Tut)</span>}
-                      </span>
+                {/* Day columns */}
+                {DAYS.map((day) => {
+                  const personalCourse = getStudentCourseAtSlot(day, timeObj.value);
+                  const genericSlot = GENERIC_TIMETABLE[`${day}-${timeObj.value}`];
+                  
+                  return (
+                    <td
+                      key={`${day}-${timeObj.value}`}
+                      className={`border border-slate-800 p-2 text-center align-middle h-16 transition-colors ${
+                        personalCourse && viewMode === "personal" ? "bg-blue-50/50" : ""
+                      }`}
+                    >
+                      {timeObj.value === "lunch" ? (
+                        <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Break</span>
+                      ) : viewMode === "personal" ? (
+                        personalCourse ? (
+                          <div className="leading-tight">
+                            <div className="font-bold text-blue-900 underline decoration-blue-200">{personalCourse.courses?.course_code}</div>
+                            <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">{personalCourse.courses?.slot}</div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )
+                      ) : (
+                        <span className={`font-medium ${genericSlot === "—" ? "text-slate-300" : "text-slate-700"}`}>
+                          {genericSlot || "—"}
+                        </span>
+                      )}
                     </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-                    {/* Day columns - Generic slots */}
-                    {DAYS.map((day) => {
-                      const slotKey = `${day}-${timeObj.value}`;
-                      const slotValue = GENERIC_TIMETABLE[slotKey];
-                      
-                      return (
-                        <td
-                          key={`generic-${day}-${timeObj.value}`}
-                          className={`p-2 border text-center text-xs md:text-sm font-semibold ${
-                            timeObj.value === "lunch"
-                              ? "bg-yellow-50 text-yellow-700"
-                              : slotValue === "—"
-                              ? "bg-gray-50 text-gray-300"
-                              : "bg-gray-50 text-gray-700"
-                          }`}
-                        >
-                          {slotValue === "—" ? "—" : slotValue}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Footer / Legend - Clean Academic Style */}
+      {viewMode === "personal" && enrolled.length > 0 && (
+        <div className="mt-12 border-t-2 border-slate-800 pt-6">
+          <h3 className="text-lg font-bold mb-6 uppercase tracking-wider flex items-center gap-3">
+            <span className="bg-slate-800 text-white px-2 py-0.5 text-sm">List</span> 
+            Enrolled Course Registry
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 border-l border-t border-slate-200">
+            {enrolled.map((course, idx) => (
+              <div 
+                key={course.enrollment_id} 
+                className="p-4 border-r border-b border-slate-200 hover:bg-slate-50 flex items-start gap-4"
+              >
+                <span className="text-xs font-bold text-slate-400">0{idx + 1}</span>
+                <div>
+                  <div className="font-bold text-slate-900 tracking-tight">{course.courses?.course_code}</div>
+                  <div className="text-xs text-slate-600 line-clamp-1 mb-2">{course.courses?.title}</div>
+                  <div className="inline-block bg-slate-100 border border-slate-300 px-2 py-0.5 text-[10px] font-bold uppercase">
+                    Slot: {course.courses?.slot}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
-        <div>
-          <div className="mb-4">
-            <h3 className="text-lg font-bold text-gray-800">My Enrolled Courses</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Your enrolled courses are highlighted below. Empty slots show "—".
-            </p>
-          </div>
-        
-        {enrolled.length === 0 ? (
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-300 p-12 rounded-lg text-center shadow-sm">
-            <p className="text-2xl">🎓</p>
-            <p className="text-gray-700 font-bold text-lg mt-3">No Enrolled Courses</p>
-            <p className="text-sm text-gray-600 mt-2 max-w-md mx-auto">
-              Your class schedule will appear here once you enroll in courses. Visit the <span className="font-semibold">Courses</span> section to register for classes.
-            </p>
-          </div>
-        ) : (
-          <>
-          <div className="bg-white rounded-lg shadow-lg overflow-x-auto border border-blue-200 mb-6">
-            <table className="w-full border-collapse text-sm">
-              {/* Header */}
-              <thead>
-                <tr>
-                  <th className="bg-gray-900 text-white p-3 text-left font-semibold border">Timings</th>
-                  {DAYS.map((day) => (
-                    <th key={day} className="bg-blue-600 text-white p-3 text-center font-semibold border">
-                      {day}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
 
-              {/* Body */}
-              <tbody>
-                {TIMES.map((timeObj) => (
-                  <tr key={timeObj.value}>
-                    {/* Time slot column */}
-                    <td className={`p-3 font-semibold border text-left whitespace-nowrap ${
-                      timeObj.isTutorial ? "bg-orange-50" : "bg-gray-100"
-                    }`}>
-                      <span className="text-xs md:text-sm">
-                        {timeObj.label}
-                        {timeObj.isTutorial && <span className="text-orange-600 font-bold"> (Tut)</span>}
-                      </span>
-                    </td>
-
-                    {/* Day columns - Student courses */}
-                    {DAYS.map((day) => {
-                      const course = getStudentCourseAtSlot(day, timeObj.value);
-                      const slotKey = `${day}-${timeObj.value}`;
-                      const expectedSlot = GENERIC_TIMETABLE[slotKey];
-                      
-                      return (
-                        <td
-                          key={`${day}-${timeObj.value}`}
-                          className={`p-3 border text-center font-semibold transition ${
-                            course
-                              ? "bg-blue-100 text-blue-900 border-blue-400"
-                              : timeObj.value === "lunch"
-                              ? "bg-yellow-50 text-yellow-700"
-                              : expectedSlot === "—"
-                              ? "bg-gray-50 text-gray-300"
-                              : "bg-white text-gray-400"
-                          }`}
-                        >
-                          {course ? (
-                            <div className="text-xs md:text-sm">
-                              <div className="font-bold">{course.courses?.course_code}</div>
-                              <div className="text-xs opacity-75">{course.courses?.slot}</div>
-                            </div>
-                          ) : timeObj.value === "lunch" ? (
-                            "🍽️"
-                          ) : expectedSlot === "—" ? (
-                            "—"
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Legend */}
-          {enrolled.length > 0 && (
-            <div className="mt-8 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-md border border-blue-200">
-              <h3 className="text-lg font-bold text-blue-900 mb-5 flex items-center gap-2">
-                <span>📚</span> Your Enrolled Courses
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {enrolled.map((course, idx) => (
-                  <div 
-                    key={course.enrollment_id} 
-                    className="flex items-start gap-3 bg-white p-4 rounded-lg border-l-4 border-blue-600 shadow-sm hover:shadow-md transition duration-200 hover:border-indigo-600"
-                  >
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 text-blue-600 font-bold text-sm">
-                      {idx + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-blue-900 text-sm">{course.courses?.course_code}</div>
-                      <div className="text-xs text-gray-600 truncate mt-1">{course.courses?.title}</div>
-                      <div className="text-xs text-gray-700 mt-2">
-                        <span className="font-semibold text-gray-800">Slot: </span>
-                        <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded inline-block font-semibold">
-                          {course.courses?.slot}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          </>
-        )}
-      </div> 
+      {/* Empty State */}
+      {viewMode === "personal" && enrolled.length === 0 && (
+        <div className="mt-12 p-12 text-center border-2 border-dashed border-slate-200 text-slate-400">
+          <p className="text-sm font-medium">No courses found for session {CURRENT_SESSION}.</p>
+          <p className="text-xs mt-1 italic text-slate-300">Please contact the registrar if this is an error.</p>
+        </div>
+      )}
     </div>
   );
 }
