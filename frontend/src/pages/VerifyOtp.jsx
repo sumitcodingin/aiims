@@ -95,18 +95,27 @@ export default function VerifyOtp() {
         otp: otpValue,
       });
 
+      // 1. Destructure backend response
       const { sessionId, user } = res.data;
 
-      sessionStorage.setItem("sessionId", sessionId);
-      sessionStorage.setItem("userId", user.id);
-      sessionStorage.setItem("user", JSON.stringify(user));
+      // 2. CONSTRUCT A SINGLE SESSION OBJECT
+      // We merge sessionId INTO the user object so api.js can find it easily.
+      const sessionUser = {
+        ...user,             // properties: id, name, role, department
+        user_id: user.id,    // Normalize ID for safety (some files check user_id)
+        sessionId: sessionId // CRITICAL: Include session ID in the main object
+      };
+
+      // 3. Store the COMPLETE object in sessionStorage
+      sessionStorage.setItem("user", JSON.stringify(sessionUser));
+      
+      // Clear temporary auth data
       sessionStorage.removeItem("otp_email");
 
-      api.defaults.headers.common["x-session-id"] = sessionId;
-      api.defaults.headers.common["x-user-id"] = user.id;
-
+      // 4. Navigate to dashboard
       navigate("/dashboard", { replace: true });
     } catch (err) {
+      console.error(err);
       alert(err.response?.data?.error || "OTP verification failed.");
     } finally {
       setLoading(false);
