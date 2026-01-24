@@ -7,7 +7,8 @@ export default function StudentTimetable() {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("personal"); // "generic" or "personal"
 
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  // CHANGED: sessionStorage -> localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
   const CURRENT_SESSION = "2025-II";
 
   // Time slots
@@ -86,6 +87,7 @@ export default function StudentTimetable() {
   };
 
   useEffect(() => {
+    if (!user || !user.id) return;
     setLoading(true);
     api
       .get("/student/records", {
@@ -96,17 +98,11 @@ export default function StudentTimetable() {
       })
       .then((res) => {
         const data = res.data.records || res.data;
-        console.log("✅ Timetable data:", data);
         
         // Filter only ENROLLED courses
         const enrolledCourses = (Array.isArray(data) ? data : []).filter(
           (r) => r.status === "ENROLLED"
         );
-        
-        console.log("✅ Enrolled courses:", enrolledCourses);
-        enrolledCourses.forEach((c) => {
-          console.log("📍 Course:", c.courses?.course_code, "Slot:", c.courses?.slot);
-        });
         
         setEnrolled(enrolledCourses);
       })
@@ -115,7 +111,7 @@ export default function StudentTimetable() {
         setError("Failed to load timetable");
       })
       .finally(() => setLoading(false));
-  }, [user.id]);
+  }, [user?.id]);
 
   // Get course at specific day and time (for personal timetable)
   const getStudentCourseAtSlot = (day, timeValue) => {
@@ -127,10 +123,7 @@ export default function StudentTimetable() {
     // Find any enrolled course that has a slot matching this day-time position
     const course = enrolled.find((course) => {
       const studentSlot = course.courses?.slot;
-      if (!studentSlot) {
-        console.warn("Course has no slot:", course.courses?.course_code);
-        return false;
-      }
+      if (!studentSlot) return false;
       
       // Look up what slot code should be at this day-time
       const expectedSlotAtThisTime = GENERIC_TIMETABLE[slotKey];
@@ -141,15 +134,13 @@ export default function StudentTimetable() {
       
       const matches = baseSlot === expectedBaseSlot;
       
-      if (matches) {
-        console.log(`✅ Found ${course.courses?.course_code} (Slot: ${studentSlot}) at ${slotKey}`);
-      }
-      
       return matches;
     });
     
     return course;
   };
+
+  if (!user) return <p>Loading session...</p>;
 
   if (loading) {
     return <p className="text-gray-600">Loading timetable...</p>;
@@ -161,7 +152,7 @@ export default function StudentTimetable() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">� Timetable</h2>
+      <h2 className="text-2xl font-bold mb-6">📅 Timetable</h2>
 
       {/* Summary Card */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6 rounded-lg shadow-lg mb-6">
@@ -271,6 +262,11 @@ export default function StudentTimetable() {
           </div>
         </div>
       )}
+
+      {/* ============================================================ */}
+      {/* PERSONAL TIMETABLE */}
+      {/* ============================================================ */}
+      {viewMode === "personal" && (
         <div>
           <div className="mb-4">
             <h3 className="text-lg font-bold text-gray-800">My Enrolled Courses</h3>
@@ -390,6 +386,7 @@ export default function StudentTimetable() {
           </>
         )}
       </div> 
+      )} 
     </div>
   );
 }

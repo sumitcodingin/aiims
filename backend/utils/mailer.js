@@ -1,10 +1,10 @@
 const nodemailer = require('nodemailer');
 
 /* ============================================================
-   TRANSPORTER CONFIGURATION (Fixed for Speed)
-   - host: smtp.gmail.com (Direct connection)
-   - family: 4 (CRITICAL FIX: Forces IPv4 to prevent 4-min IPv6 timeouts)
-   - pool: true (Keeps connection alive)
+   TRANSPORTER CONFIGURATION (Optimized)
+   - host: smtp.gmail.com
+   - family: 4 (Forces IPv4 at socket level)
+   - pool: true (Keeps connection alive for speed)
 ============================================================ */
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -13,13 +13,13 @@ const transporter = nodemailer.createTransport({
   pool: true,   // Reuses open connections
   maxConnections: 5,
   maxMessages: 100,
-  family: 4,    // <--- THIS FIXES THE 5-MINUTE DELAY (Forces IPv4)
+  family: 4,    // <--- CRITICAL: Forces IPv4 network stack
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
   tls: {
-    rejectUnauthorized: false // Fixes certificate issues on some networks
+    rejectUnauthorized: false // Helps with some strict firewalls
   }
 });
 
@@ -55,12 +55,72 @@ const sendOTPEmail = async (email, otp) => {
     console.log(`✅ OTP sent to ${email} (MsgID: ${info.messageId})`);
   } catch (error) {
     console.error("❌ Failed to send OTP:", error);
-    throw error; 
+    // Don't throw error here to prevent crashing the request loop, just log it
   }
 };
 
 /* ============================================================
-   2. SEND NOTIFICATION EMAIL (Approved/Rejected/etc)
+   2. SEND ENROLLMENT STATUS EMAIL (Moved from sendEmail.js)
+============================================================ */
+const sendStatusEmail = async (email, studentName, courseTitle, status) => {
+  if (!email) return;
+
+  try {
+    let statusMessage = "";
+    let color = "#333";
+
+    switch (status) {
+      case "PENDING_INSTRUCTOR_APPROVAL":
+        statusMessage = "Your application has been submitted and is pending Instructor approval.";
+        color = "#d97706"; // Amber
+        break;
+      case "PENDING_ADVISOR_APPROVAL":
+        statusMessage = "The Instructor has approved your application. It is now pending Advisor approval.";
+        color = "#2563eb"; // Blue
+        break;
+      case "ENROLLED":
+        statusMessage = "Congratulations! You have been successfully enrolled in this course.";
+        color = "#16a34a"; // Green
+        break;
+      case "INSTRUCTOR_REJECTED":
+      case "ADVISOR_REJECTED":
+        statusMessage = "We regret to inform you that your application for this course was rejected.";
+        color = "#dc2626"; // Red
+        break;
+      case "DROPPED_BY_STUDENT":
+        statusMessage = "You have successfully dropped this course.";
+        color = "#555";
+        break;
+      default:
+        statusMessage = `Your enrollment status has changed to ${status.replace(/_/g, " ")}.`;
+    }
+
+    await transporter.sendMail({
+      from: `"AIMS Notifications" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `Course Status Update: ${courseTitle}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <h2 style="color: ${color};">Enrollment Status Update</h2>
+          <p>Dear <b>${studentName}</b>,</p>
+          <p>The status of your enrollment for the course <b>${courseTitle}</b> has been updated.</p>
+          
+          <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid ${color}; margin: 20px 0;">
+            <p style="margin: 0; font-size: 16px;"><strong>Current Status:</strong> ${status.replace(/_/g, " ")}</p>
+            <p style="margin: 5px 0 0;">${statusMessage}</p>
+          </div>
+          <p style="color: #888; font-size: 12px; margin-top: 30px;">Automated message from AIMS Portal.</p>
+        </div>
+      `
+    });
+    console.log(`✅ Status email sent to ${email} [${status}]`);
+  } catch (err) {
+    console.error("❌ Status Email Error:", err);
+  }
+};
+
+/* ============================================================
+   3. SEND ADMIN NOTIFICATION EMAIL
 ============================================================ */
 const sendNotificationEmail = async (email, action) => {
   let subject = "";
@@ -69,19 +129,15 @@ const sendNotificationEmail = async (email, action) => {
   switch (action) {
     case 'APPROVED':
       subject = "🎉 Account Approved!";
-      text = "<h3>Congratulations!</h3><p>Your account has been approved by the Admin. You can now login to the AIMS Portal.</p>";
+      text = "<h3>Congratulations!</h3><p>Your account has been approved by the Admin.</p>";
       break;
     case 'REJECTED':
       subject = "Account Application Status";
-      text = "<h3>Application Update</h3><p>We regret to inform you that your account application has been rejected.</p>";
+      text = "<h3>Application Update</h3><p>Your account application has been rejected.</p>";
       break;
     case 'BLOCKED':
       subject = "Account Suspended";
-      text = "<h3>Action Required</h3><p>Your account has been temporarily blocked by the Administrator. Please contact support.</p>";
-      break;
-    case 'REMOVED':
-      subject = "Account Removed";
-      text = "<h3>Account Update</h3><p>Your account has been removed from the AIMS Portal.</p>";
+      text = "<h3>Action Required</h3><p>Your account has been temporarily blocked.</p>";
       break;
     default:
       return;
@@ -100,4 +156,4 @@ const sendNotificationEmail = async (email, action) => {
   }
 };
 
-module.exports = { sendOTPEmail, sendNotificationEmail };
+module.exports = { sendOTPEmail, sendStatusEmail, sendNotificationEmail };

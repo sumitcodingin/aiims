@@ -13,16 +13,13 @@ export default function StudentRecords() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [semesterFilter, setSemesterFilter] = useState("ALL");
 
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  // CHANGED: sessionStorage -> localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
   const CURRENT_SESSION = "2025-II";
 
-  // Grade to points mapping
-  const GRADE_POINTS = {
-    'A': 10, 'A-': 9, 'B': 8, 'B-': 7, 'C': 6, 'C-': 5, 'D': 4,
-    'E': 2, 'F': 0
-  };
-
   useEffect(() => {
+    if (!user || !user.id) return;
+    
     setLoading(true);
     Promise.all([
       api.get("/student/records", {
@@ -52,7 +49,7 @@ export default function StudentRecords() {
       setSgpa("0.00");
     })
     .finally(() => setLoading(false));
-  }, [user.id]);
+  }, [user?.id]);
 
   // -------------------------
   // Status helpers
@@ -108,6 +105,8 @@ export default function StudentRecords() {
 
     return matchesSearch && matchesStatus;
   });
+
+  if (!user) return <p>Loading session...</p>;
 
   // -------------------------
   // UI

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import logo from "../assets/images/iit_ropar_logo.jpg";
@@ -14,6 +14,16 @@ export default function Signup() {
     batch: "",
     entry_no: ""
   });
+
+  /* =========================================================
+     ✅ AUTO-LOGIN CHECK (For Signup Page too)
+  ========================================================= */
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate]);
 
   const sendOtp = async () => {
     const isStudent = form.role === "Student";

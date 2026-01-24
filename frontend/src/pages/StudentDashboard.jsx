@@ -6,14 +6,17 @@ import StudentRecords from "./student/StudentRecords";
 import StudentTimetable from "./student/StudentTimetable";
 import CourseInstructorFeedback from "./student/CourseInstructorFeedback";
 import AcademicEvents from "./student/AcademicEvents";
-import StudentProjects from "./student/StudentProjects"; // Import the new component
+import StudentProjects from "./student/StudentProjects"; 
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("courses");
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  
+  // CHANGED: sessionStorage -> localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
 
   const logout = () => {
-    sessionStorage.removeItem("user");
+    // CHANGED: sessionStorage -> localStorage
+    localStorage.removeItem("user");
     window.location.href = "/";
   };
 
@@ -35,7 +38,6 @@ export default function StudentDashboard() {
               active={activeTab === "courses"}
               onClick={() => setActiveTab("courses")}
             />
-            {/* Added Projects Button */}
             <NavButton
               label="Projects"
               active={activeTab === "projects"}
