@@ -1,5 +1,5 @@
 const supabase = require("../supabaseClient");
-const { sendStatusEmail } = require('../utils/sendEmail');
+const { sendStatusEmail } = require('../utils/mailer'); // CHANGED: Points to centralized mailer
 
 /* ===================================================
    Helper: Update Course Enrolled Count

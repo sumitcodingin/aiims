@@ -1,6 +1,7 @@
 const supabase = require("../supabaseClient");
 const { sendCustomEmail } = require("../utils/sendCustomEmail");
-const { sendStatusEmail } = require('../utils/sendEmail');
+// CHANGED: Import from 'mailer' instead of the deleted 'sendEmail'
+const { sendStatusEmail } = require('../utils/mailer');
 
 /* ===================================================
    Helper: Update Course Enrolled Count
@@ -437,10 +438,6 @@ exports.scheduleMeeting = async (req, res) => {
       `;
   
       // 5. Send Email with Attachment
-      //    - To: ALL Selected Students (So they see it in their inbox directly)
-      //    - Cc: Advisor (So they also get the invite)
-      //    - Reply-To: Advisor Email
-      
       await sendCustomEmail({
         to: student_emails, // UPDATED: Sends directly to students list
         cc: [advisor.email], // UPDATED: Advisor gets a copy

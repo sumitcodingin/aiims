@@ -1,7 +1,12 @@
 const nodemailer = require("nodemailer");
 
+// FIXED: Using "host" + "family: 4" to prevent IPv6 timeouts (Speed Fix)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // Use SSL
+  pool: true,   // Keep connection alive
+  family: 4,    // <--- CRITICAL: Forces IPv4 network stack
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,

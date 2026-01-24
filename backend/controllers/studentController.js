@@ -1,5 +1,5 @@
 const supabase = require('../supabaseClient');
-const { sendStatusEmail } = require('../utils/sendEmail');
+const { sendStatusEmail } = require('../utils/mailer'); // CHANGED: Points to centralized mailer
 
 /* ===================================================
    Helper: Update Course Enrolled Count
@@ -52,17 +52,13 @@ exports.applyForCourse = async (req, res) => {
 
     if (existing) {
       if (['DROPPED_BY_STUDENT', 'INSTRUCTOR_REJECTED', 'ADVISOR_REJECTED'].includes(existing.status)) {
-        // Re-applying is fine, BUT we still need to check slot collision below
+        // Re-applying is fine
       } else {
         return res.status(400).json({ error: 'Active application exists.' });
       }
     }
 
-    // 3. 🚀 EDGE CASE 2: Check for Slot Collision with other ENROLLED courses in the same session
-    // We need to fetch all enrollments for this student where status is 'ENROLLED'
-    // and the linked course has the same session and same slot.
-    
-    // Fetch all enrolled courses for this student
+    // 3. Check for Slot Collision with other ENROLLED courses
     const { data: enrolledCourses, error: enrolledError } = await supabase
         .from('enrollments')
         .select(`
@@ -80,7 +76,6 @@ exports.applyForCourse = async (req, res) => {
 
     if (enrolledCourses && enrolledCourses.length > 0) {
         for (const record of enrolledCourses) {
-            // Check if sessions match (usually we only care about collision in the current session)
             if (record.courses.acad_session === course.acad_session) {
                 if (record.courses.slot === course.slot) {
                     return res.status(400).json({ 
@@ -90,7 +85,6 @@ exports.applyForCourse = async (req, res) => {
             }
         }
     }
-    // -------------------------------------------------------------
 
     // 4. Proceed with Insert / Update
     if (existing && ['DROPPED_BY_STUDENT', 'INSTRUCTOR_REJECTED', 'ADVISOR_REJECTED'].includes(existing.status)) {
@@ -137,7 +131,7 @@ exports.dropCourse = async (req, res) => {
       .update({ status: 'DROPPED_BY_STUDENT' })
       .eq('enrollment_id', enrollmentId);
 
-    // 2. 🚀 UPDATE DATABASE COUNT (If they were enrolled)
+    // 2. Update Count
     if (enrollment.status === 'ENROLLED') {
       await updateCourseEnrolledCount(enrollment.course_id);
     }
@@ -217,7 +211,6 @@ exports.getAllStudentRecords = async (req, res) => {
     
     if (error) throw error;
     
-    // Group by session
     const bySession = {};
     data.forEach(record => {
       const session = record.courses?.acad_session || 'Unknown';
@@ -225,15 +218,12 @@ exports.getAllStudentRecords = async (req, res) => {
       bySession[session].push(record);
     });
     
-    // Calculate SGPA for each session and overall CGPA
     let totalCumulativePoints = 0;
     let totalCumulativeCredits = 0;
     const sessions = {};
     
     Object.entries(bySession).forEach(([session, records]) => {
       const sgpa = calculateSGPA(records);
-      
-      // Calculate credits for this session
       let sessionCredits = 0;
       let sessionEarnedCredits = 0;
       records.forEach(record => {
@@ -252,7 +242,6 @@ exports.getAllStudentRecords = async (req, res) => {
         records
       };
       
-      // Add to cumulative (only passed courses)
       records.forEach(record => {
         if (record.grade && GRADE_POINTS[record.grade] !== null && ['A', 'A-', 'B', 'B-', 'C', 'C-', 'D', 'E'].includes(record.grade)) {
           const gradePoint = GRADE_POINTS[record.grade];

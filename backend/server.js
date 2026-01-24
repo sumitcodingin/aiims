@@ -1,6 +1,21 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const dns = require("dns");
+
+// ====================================================
+// 🚀 CRITICAL FIX: Force IPv4 for DNS Resolution
+// Fixes 4-5 minute email delay with Gmail SMTP
+// ====================================================
+try {
+  if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+    console.log("✅ DNS set to IPv4 First (Email speed fix applied)");
+  }
+} catch (e) {
+  // Graceful fallback for older Node versions
+  console.warn("⚠️ Could not set DNS result order (older Node version?)");
+}
 
 // ============================
 // ROUTE IMPORTS

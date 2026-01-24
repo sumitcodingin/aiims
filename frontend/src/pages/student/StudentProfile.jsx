@@ -4,16 +4,20 @@ import collegeLogo from "../../assets/images/iit_ropar_logo.jpg";
 
 export default function StudentProfile() {
   const [profile, setProfile] = useState(null);
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  
+  // CHANGED: sessionStorage -> localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
 
   useEffect(() => {
-    api
-      .get("/student/profile", {
-        params: { student_id: user.id },
-      })
-      .then((res) => setProfile(res.data))
-      .catch(() => setProfile(null));
-  }, [user.id]);
+    if (user && user.id) {
+      api
+        .get("/student/profile", {
+          params: { student_id: user.id },
+        })
+        .then((res) => setProfile(res.data))
+        .catch(() => setProfile(null));
+    }
+  }, [user?.id]);
 
   if (!profile) {
     return <p className="text-gray-600">Loading profile...</p>;

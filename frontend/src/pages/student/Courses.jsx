@@ -26,10 +26,14 @@ export default function Courses() {
     capacity: 0,
   });
 
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  // CHANGED: sessionStorage -> localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
   const CURRENT_SESSION = "2025-II";
 
   const fetchData = useCallback(async () => {
+    // Safety check to prevent crash if user is null
+    if (!user || !user.id) return;
+
     try {
       const coursesRes = await api.get("/courses/search", {
         params: search,
@@ -48,7 +52,7 @@ export default function Courses() {
     } catch (err) {
       console.error("Failed to fetch data:", err);
     }
-  }, [user.id, search]);
+  }, [user?.id, search]);
 
   useEffect(() => {
     fetchData();
@@ -200,6 +204,8 @@ export default function Courses() {
 
     return { enrollment, status, canApply, canDrop };
   };
+
+  if (!user) return <p>Loading session...</p>;
 
   return (
     <>
