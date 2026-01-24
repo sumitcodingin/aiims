@@ -11,10 +11,10 @@ import InstructorProjects from "./instructor/InstructorProjects"; // ✅ NEW IMP
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  const user = JSON.parse(localStorage.getItem("user"));
 
   const logout = () => {
-    sessionStorage.removeItem("user");
+    localStorage.removeItem("user");
     window.location.href = "/";
   };
 

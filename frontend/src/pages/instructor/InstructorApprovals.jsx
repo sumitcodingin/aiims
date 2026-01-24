@@ -9,7 +9,10 @@ const downloadEnrolledStudentsCSV = async (course_id, course_code, instructor_id
   });
 
   const students = res.data || [];
-  if (!students.length) return alert("No enrolled students");
+  if (!students.length) {
+    alert("No enrolled students");
+    return;
+  }
 
   const csv = [
     "Student Name,Email",
@@ -24,33 +27,40 @@ const downloadEnrolledStudentsCSV = async (course_id, course_code, instructor_id
 };
 
 export default function InstructorApprovals() {
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  /* ================= HOOKS (ALWAYS FIRST) ================= */
 
   const [courses, setCourses] = useState([]);
   const [applications, setApplications] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [viewMode, setViewMode] = useState("PENDING");
 
-  /* ===== FILTER STATES ===== */
   const [courseSearch, setCourseSearch] = useState("");
   const [courseDept, setCourseDept] = useState("");
-
   const [studentSearch, setStudentSearch] = useState("");
   const [studentDept, setStudentDept] = useState("");
+
+  /* ================= USER SESSION ================= */
+
+  const user = JSON.parse(localStorage.getItem("user"));
+  const isSessionValid = Boolean(user && user.id);
 
   /* ================= FETCH COURSES ================= */
 
   useEffect(() => {
+    if (!isSessionValid) return;
+
     api
-      .get("/instructor/courses", { params: { instructor_id: user.id } })
+      .get("/instructor/courses", {
+        params: { instructor_id: user.id },
+      })
       .then(res => setCourses(res.data || []))
       .catch(() => setCourses([]));
-  }, [user.id]);
+  }, [isSessionValid, user?.id]);
 
   /* ================= FETCH APPLICATIONS ================= */
 
   useEffect(() => {
-    if (!selectedCourse) return;
+    if (!isSessionValid || !selectedCourse) return;
 
     api
       .get("/instructor/applications", {
@@ -58,11 +68,13 @@ export default function InstructorApprovals() {
       })
       .then(res => setApplications(res.data || []))
       .catch(() => setApplications([]));
-  }, [selectedCourse]);
+  }, [isSessionValid, selectedCourse]);
 
   /* ================= ACTION ================= */
 
   const handleAction = async (enrollmentId, action) => {
+    if (!isSessionValid) return;
+
     if (action === "REMOVE" && !window.confirm("Remove student?")) return;
 
     await api.post("/instructor/approve-request", {
@@ -76,7 +88,7 @@ export default function InstructorApprovals() {
     );
   };
 
-  /* ================= FILTERED COURSES ================= */
+  /* ================= FILTERED DATA ================= */
 
   const filteredCourses = courses.filter(c => {
     const q = courseSearch.toLowerCase();
@@ -86,8 +98,6 @@ export default function InstructorApprovals() {
       (!courseDept || c.department === courseDept)
     );
   });
-
-  /* ================= FILTERED STUDENTS ================= */
 
   const filteredStudents = applications
     .filter(a =>
@@ -106,12 +116,21 @@ export default function InstructorApprovals() {
       );
     });
 
+  /* ================= SESSION EXPIRED UI ================= */
+
+  if (!isSessionValid) {
+    return (
+      <div className="p-10 text-red-600 font-bold">
+        Session expired. Please login again.
+      </div>
+    );
+  }
+
   /* ================= UI ================= */
 
   return (
     <div className="max-w-6xl">
 
-      {/* ================= COURSE LIST ================= */}
       {!selectedCourse && (
         <>
           <h2 className="text-xl font-bold mb-4">My Courses</h2>
@@ -121,13 +140,13 @@ export default function InstructorApprovals() {
               placeholder="Search course code / title"
               className="border px-3 py-2 text-sm"
               value={courseSearch}
-              onChange={(e) => setCourseSearch(e.target.value)}
+              onChange={e => setCourseSearch(e.target.value)}
             />
 
             <select
               className="border px-3 py-2 text-sm"
               value={courseDept}
-              onChange={(e) => setCourseDept(e.target.value)}
+              onChange={e => setCourseDept(e.target.value)}
             >
               <option value="">All Departments</option>
               {[...new Set(courses.map(c => c.department))].map(d => (
@@ -156,7 +175,9 @@ export default function InstructorApprovals() {
                     </td>
                     <td className="px-3 py-2">{c.department}</td>
                     <td className="px-3 py-2">{c.acad_session}</td>
-                    <td className="px-3 py-2">{c.enrolled_count}/{c.capacity}</td>
+                    <td className="px-3 py-2">
+                      {c.enrolled_count}/{c.capacity}
+                    </td>
                     <td className="px-3 py-2 text-right">
                       <button
                         onClick={() => setSelectedCourse(c)}
@@ -173,7 +194,6 @@ export default function InstructorApprovals() {
         </>
       )}
 
-      {/* ================= COURSE DETAILS ================= */}
       {selectedCourse && (
         <>
           <button
@@ -190,11 +210,6 @@ export default function InstructorApprovals() {
             <h3 className="text-lg font-bold">
               {selectedCourse.course_code} — {selectedCourse.title}
             </h3>
-            <p className="text-sm">Department: {selectedCourse.department}</p>
-            <p className="text-sm">Session: {selectedCourse.acad_session}</p>
-            <p className="text-sm">
-              Seats: {selectedCourse.enrolled_count}/{selectedCourse.capacity}
-            </p>
 
             <button
               onClick={() =>
@@ -210,37 +225,6 @@ export default function InstructorApprovals() {
             </button>
           </div>
 
-          {/* ===== VIEW MODE + STUDENT FILTERS ===== */}
-          <div className="grid md:grid-cols-4 gap-3 mb-3">
-            <select
-              className="border px-3 py-2 text-sm"
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value)}
-            >
-              <option value="PENDING">Pending Applications</option>
-              <option value="ENROLLED">Enrolled Students</option>
-            </select>
-
-            <input
-              placeholder="Search student name / entry no"
-              className="border px-3 py-2 text-sm"
-              value={studentSearch}
-              onChange={(e) => setStudentSearch(e.target.value)}
-            />
-
-            <select
-              className="border px-3 py-2 text-sm"
-              value={studentDept}
-              onChange={(e) => setStudentDept(e.target.value)}
-            >
-              <option value="">All Departments</option>
-              {[...new Set(applications.map(a => a.student?.department).filter(Boolean))].map(d => (
-                <option key={d}>{d}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* ===== STUDENT TABLE ===== */}
           <StudentTable
             students={filteredStudents}
             viewMode={viewMode}
@@ -255,39 +239,27 @@ export default function InstructorApprovals() {
 /* ================= STUDENT TABLE ================= */
 
 function StudentTable({ students, viewMode, onAction }) {
-  if (!students.length)
+  if (!students.length) {
     return <p className="text-sm text-gray-500">No records found.</p>;
+  }
 
   return (
     <div className="bg-white border">
       <table className="w-full text-sm">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="px-3 py-2 text-left">Student</th>
-            <th className="px-3 py-2">Department</th>
-            <th></th>
-          </tr>
-        </thead>
         <tbody>
           {students.map(a => (
             <tr key={a.enrollment_id} className="border-t">
               <td className="px-3 py-2">
                 <b>{a.student?.full_name}</b>
-                <div className="text-xs text-gray-600">
-                  {a.student?.entry_no || a.student?.email}
-                </div>
               </td>
-              <td className="px-3 py-2">{a.student?.department}</td>
-              <td className="px-3 py-2 text-right space-x-2">
+              <td className="px-3 py-2 text-right">
                 {viewMode === "PENDING" ? (
                   <>
-                    <Btn green onClick={() => onAction(a.enrollment_id, "ACCEPT")}>Accept</Btn>
-                    <Btn red onClick={() => onAction(a.enrollment_id, "REJECT")}>Reject</Btn>
+                    <button onClick={() => onAction(a.enrollment_id, "ACCEPT")}>Accept</button>
+                    <button onClick={() => onAction(a.enrollment_id, "REJECT")}>Reject</button>
                   </>
                 ) : (
-                  <Btn red outline onClick={() => onAction(a.enrollment_id, "REMOVE")}>
-                    Remove
-                  </Btn>
+                  <button onClick={() => onAction(a.enrollment_id, "REMOVE")}>Remove</button>
                 )}
               </td>
             </tr>
@@ -295,21 +267,5 @@ function StudentTable({ students, viewMode, onAction }) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-/* ================= BUTTON ================= */
-
-function Btn({ children, onClick, green, red, outline }) {
-  let cls = "px-3 py-1 text-xs border rounded ";
-
-  if (green) cls += "bg-green-600 text-white border-green-600 hover:bg-green-700 ";
-  if (red && !outline) cls += "bg-red-600 text-white border-red-600 hover:bg-red-700 ";
-  if (outline && red) cls += "text-red-600 border-red-600 hover:bg-red-50 ";
-
-  return (
-    <button onClick={onClick} className={cls}>
-      {children}
-    </button>
   );
 }
