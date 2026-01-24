@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../services/api";
 
+/* ================= CONSTANTS ================= */
+
 const YES_NO_OPTIONS = ["Yes", "No"];
+
 const LIKERT5_OPTIONS = [
   "Strongly agree",
   "Agree",
@@ -31,8 +34,11 @@ const LIKERT_SCORE = {
   "Strongly disagree": 1,
 };
 
+/* ================= COMPONENT ================= */
+
 export default function InstructorFeedback() {
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  const storedUser = localStorage.getItem("user");
+  const userId = storedUser ? JSON.parse(storedUser)?.id : null;
 
   const [courses, setCourses] = useState([]);
   const [courseId, setCourseId] = useState("");
@@ -41,79 +47,83 @@ export default function InstructorFeedback() {
   const [loading, setLoading] = useState(false);
   const [showRaw, setShowRaw] = useState(true);
 
+  /* ================= FETCH COURSES ================= */
+
   useEffect(() => {
+    if (!userId) return;
+
     api
-      .get("/instructor/courses", { params: { instructor_id: user.id } })
+      .get("/instructor/courses", {
+        params: { instructor_id: userId },
+      })
       .then((res) => setCourses(res.data || []))
       .catch(() => setCourses([]));
-  }, [user.id]);
+  }, [userId]);
 
-  const fetchRows = async () => {
+  /* ================= FETCH FEEDBACK ================= */
+
+  useEffect(() => {
+    if (!userId) return;
+
     setLoading(true);
-    try {
-      const res = await api.get("/instructor/feedback", {
+    api
+      .get("/instructor/feedback", {
         params: {
-          instructor_id: user.id,
+          instructor_id: userId,
           course_id: courseId || undefined,
           feedback_type: feedbackType || undefined,
         },
-      });
-      setRows(res.data || []);
-    } catch {
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+      })
+      .then((res) => setRows(res.data || []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [userId, courseId, feedbackType]);
 
-  useEffect(() => {
-    fetchRows();
-    // eslint-disable-next-line
-  }, [courseId, feedbackType]);
+  /* ================= ANALYSIS ================= */
 
   const analysis = useMemo(() => {
-    const total = rows.length;
-
     const byQuestion = QUESTIONS.map((q) => {
       const options = q.type === "yesno" ? YES_NO_OPTIONS : LIKERT5_OPTIONS;
       const counts = Object.fromEntries(options.map((o) => [o, 0]));
-      let answered = 0;
       let scoreSum = 0;
       let scoreCount = 0;
 
-      for (const r of rows) {
+      rows.forEach((r) => {
         const val = r?.[q.key];
-        if (!val) continue;
-        answered += 1;
-        if (counts[val] !== undefined) counts[val] += 1;
+        if (!val) return;
+        if (counts[val] !== undefined) counts[val]++;
         if (q.type === "likert5" && LIKERT_SCORE[val]) {
           scoreSum += LIKERT_SCORE[val];
-          scoreCount += 1;
+          scoreCount++;
         }
-      }
+      });
 
       return {
         ...q,
-        answered,
-        total,
-        counts,
         options,
+        counts,
         avgScore: scoreCount ? scoreSum / scoreCount : null,
       };
     });
 
-    const comments = rows
-      .map((r) => r?.q11?.trim())
-      .filter(Boolean);
+    const comments = rows.map((r) => r?.q11?.trim()).filter(Boolean);
 
-    return { total, byQuestion, comments };
+    return { byQuestion, comments };
   }, [rows]);
+
+  /* ================= RENDER ================= */
+
+  if (!userId) {
+    return (
+      <div className="p-10 text-red-600 font-semibold text-center">
+        Session expired. Please login again.
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto bg-white border border-gray-400 p-8">
-      <h2 className="text-xl font-bold mb-6">
-        Instructor Feedback Summary
-      </h2>
+      <h2 className="text-xl font-bold mb-6">Instructor Feedback Summary</h2>
 
       {/* FILTERS */}
       <div className="grid md:grid-cols-3 gap-4 mb-6">
@@ -130,15 +140,6 @@ export default function InstructorFeedback() {
           <option value="">All</option>
           <option value="Mid-sem">Mid-sem</option>
         </Select>
-
-        <div className="flex items-end">
-          <button
-            onClick={fetchRows}
-            className="bg-neutral-800 text-white px-6 py-2 text-sm"
-          >
-            Refresh
-          </button>
-        </div>
       </div>
 
       {loading ? (
@@ -147,9 +148,8 @@ export default function InstructorFeedback() {
         <p className="text-gray-600">No feedback found.</p>
       ) : (
         <>
-          {/* ANALYSIS */}
           {analysis.byQuestion.map((q) => (
-            <div key={q.key} className="mb-6 border border-gray-300 p-4">
+            <div key={q.key} className="mb-6 border p-4">
               <div className="flex justify-between mb-2">
                 <p className="font-semibold">{q.label}</p>
                 {q.avgScore !== null && (
@@ -159,16 +159,12 @@ export default function InstructorFeedback() {
                 )}
               </div>
 
-              <table className="w-full text-sm border border-gray-300">
+              <table className="w-full text-sm border">
                 <tbody>
                   {q.options.map((opt) => (
-                    <tr key={opt} className="border-b last:border-b-0">
-                      <td className="px-3 py-2 bg-gray-100 w-1/2">
-                        {opt}
-                      </td>
-                      <td className="px-3 py-2">
-                        {q.counts[opt]} responses
-                      </td>
+                    <tr key={opt}>
+                      <td className="px-3 py-2 bg-gray-100 w-1/2">{opt}</td>
+                      <td className="px-3 py-2">{q.counts[opt]} responses</td>
                     </tr>
                   ))}
                 </tbody>
@@ -176,11 +172,10 @@ export default function InstructorFeedback() {
             </div>
           ))}
 
-          {/* COMMENTS */}
-          <div className="border border-gray-300 p-4">
+          <div className="border p-4">
             <h3 className="font-semibold mb-2">Student Comments</h3>
             {analysis.comments.length === 0 ? (
-              <p className="text-sm text-gray-600">No comments submitted.</p>
+              <p className="text-sm text-gray-600">No comments.</p>
             ) : (
               <ul className="list-disc pl-5 text-sm space-y-2">
                 {analysis.comments.map((c, i) => (
@@ -190,7 +185,6 @@ export default function InstructorFeedback() {
             )}
           </div>
 
-          {/* RAW TOGGLE */}
           <div className="mt-6">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -204,28 +198,13 @@ export default function InstructorFeedback() {
 
           {showRaw &&
             rows.map((r) => (
-              <div key={r.feedback_id} className="border border-gray-300 p-4 mt-4">
+              <div key={r.feedback_id} className="border p-4 mt-4">
                 <p className="font-semibold">
                   {r.course?.course_code} – {r.course?.title}
                 </p>
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-xs text-gray-500">
                   {r.feedback_type} · {new Date(r.created_at).toLocaleString()}
                 </p>
-
-                <div className="grid md:grid-cols-2 gap-2 text-sm">
-                  {QUESTIONS.map((q) => (
-                    <div key={q.key}>
-                      <span className="font-semibold">{q.key.toUpperCase()}:</span>{" "}
-                      {r[q.key] || "—"}
-                    </div>
-                  ))}
-                </div>
-
-                {r.q11 && (
-                  <p className="mt-2 text-sm">
-                    <span className="font-semibold">Comment:</span> {r.q11}
-                  </p>
-                )}
               </div>
             ))}
         </>
@@ -234,7 +213,7 @@ export default function InstructorFeedback() {
   );
 }
 
-/* ================= HELPER ================= */
+/* ================= SELECT ================= */
 
 function Select({ label, value, onChange, children }) {
   return (
@@ -243,7 +222,7 @@ function Select({ label, value, onChange, children }) {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-400 px-3 py-2 text-sm bg-white"
+        className="w-full border border-gray-400 px-3 py-2 text-sm"
       >
         {children}
       </select>
