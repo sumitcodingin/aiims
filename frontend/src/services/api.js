@@ -8,34 +8,45 @@ const api = axios.create({
 });
 
 /* =========================================
-   ATTACH SESSION HEADERS ON LOAD
+   ATTACH SESSION HEADERS ON EVERY REQUEST
 ========================================= */
+api.interceptors.request.use(
+  (config) => {
+    /**
+     * Expected sessionStorage structure:
+     * sessionStorage.setItem("user", JSON.stringify({
+     *   id,
+     *   session_id,
+     *   role,
+     *   name
+     * }))
+     */
+    const user = JSON.parse(sessionStorage.getItem("user"));
 
-const sessionId = sessionStorage.getItem("sessionId");
-const userId = sessionStorage.getItem("userId");
+    if (user?.id && user?.session_id) {
+      config.headers["x-user-id"] = user.id;
+      config.headers["x-session-id"] = user.session_id;
+    }
 
-if (sessionId && userId) {
-  api.defaults.headers.common["x-session-id"] = sessionId;
-  api.defaults.headers.common["x-user-id"] = userId;
-}
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 /* =========================================
-   GLOBAL 401 AUTO-LOGOUT INTERCEPTOR
+   GLOBAL 401 AUTO-LOGOUT (SAFE)
 ========================================= */
-
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Session expired / invalid (logged in elsewhere)
-      sessionStorage.clear();
-
-      // Optional alert (you can remove if unwanted)
-      alert("Your session has expired. Please login again.");
-
-      window.location.href = "/";
+      // Prevent infinite loops
+      if (window.location.pathname !== "/") {
+        sessionStorage.removeItem("user");
+        alert("Your session has expired. Please login again.");
+        window.location.href = "/";
+      }
     }
-
     return Promise.reject(error);
   }
 );
