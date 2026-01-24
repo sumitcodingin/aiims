@@ -5,6 +5,7 @@ import StudentProfile from "./student/StudentProfile";
 import StudentRecords from "./student/StudentRecords";
 import CourseInstructorFeedback from "./student/CourseInstructorFeedback";
 import AcademicEvents from "./student/AcademicEvents";
+import StudentProjects from "./student/StudentProjects"; // Import the new component
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("courses");
@@ -32,6 +33,12 @@ export default function StudentDashboard() {
               label="Courses"
               active={activeTab === "courses"}
               onClick={() => setActiveTab("courses")}
+            />
+            {/* Added Projects Button */}
+            <NavButton
+              label="Projects"
+              active={activeTab === "projects"}
+              onClick={() => setActiveTab("projects")}
             />
             <NavButton
               label="Profile"
@@ -74,6 +81,7 @@ export default function StudentDashboard() {
       {/* ================= MAIN CONTENT ================= */}
       <main className="ml-64 p-6 min-h-screen overflow-y-auto">
         {activeTab === "courses" && <Courses />}
+        {activeTab === "projects" && <StudentProjects />} 
         {activeTab === "profile" && <StudentProfile />}
         {activeTab === "records" && <StudentRecords />}
         {activeTab === "feedback" && <CourseInstructorFeedback />}
@@ -93,8 +101,8 @@ function NavButton({ label, active, onClick }) {
       className={`text-left px-6 py-3 text-sm transition-colors
         ${
           active
-            ? "bg-neutral-800 text-white font-medium"
-            : "text-neutral-300 hover:bg-neutral-800"
+            ? "bg-neutral-800 text-white font-medium border-l-4 border-indigo-500"
+            : "text-neutral-300 hover:bg-neutral-800 border-l-4 border-transparent"
         }`}
     >
       {label}
