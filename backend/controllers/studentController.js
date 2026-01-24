@@ -180,22 +180,52 @@ const calculateSGPA = (records) => {
 // ===================================
 // 3. Get student records
 // ===================================
+
 exports.getStudentRecords = async (req, res) => {
   const { student_id, session } = req.query;
+
   try {
+    // ✅ ensure correct type
+    const sid = parseInt(student_id, 10);
+    if (isNaN(sid)) {
+      return res.status(400).json({ error: "Invalid student_id" });
+    }
+
     const { data, error } = await supabase
       .from('enrollments')
-      .select(`enrollment_id, status, grade, course_id, courses(course_id, course_code, title, acad_session, credits, slot)`)
-      .eq('student_id', student_id)
-      .eq('courses.acad_session', session)
+      .select(`
+        enrollment_id,
+        status,
+        grade,
+        course_id,
+        courses (
+          course_id,
+          course_code,
+          title,
+          acad_session,
+          credits,
+          slot
+        )
+      `)
+      .eq('student_id', sid)
       .order('enrollment_id', { ascending: false });
-    
+
     if (error) throw error;
-    
-    const sgpa = calculateSGPA(data);
-    res.json({ records: data, sgpa });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch records.' }); }
+
+    // ✅ FILTER BY SESSION IN JS (Supabase-safe)
+    const filtered = (data || []).filter(
+      r => r.courses && r.courses.acad_session === session
+    );
+
+    const sgpa = calculateSGPA(filtered);
+    res.json({ records: filtered, sgpa });
+
+  } catch (err) {
+    console.error("GET STUDENT RECORDS ERROR:", err);
+    res.status(500).json({ error: 'Failed to fetch records.' });
+  }
 };
+
 
 // ===================================
 // 4. Get all student records (for CGPA)

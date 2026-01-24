@@ -37,17 +37,25 @@ export default function Courses() {
 
     try {
       const coursesRes = await api.get("/courses/search", { params: search });
-      setCourses(coursesRes.data || []);
+      setCourses(Array.isArray(coursesRes.data) ? coursesRes.data : []);
+
 
       const recordsRes = await api.get("/student/records", {
         params: { student_id: user.id, session: CURRENT_SESSION }
       });
 
       const mapping = {};
-      recordsRes.data.forEach(r => {
-        mapping[r.courses.course_id] = r;
-      });
-      setAppliedMap(mapping);
+const recordsData = recordsRes.data.records || recordsRes.data;
+
+(Array.isArray(recordsData) ? recordsData : []).forEach(r => {
+  if (r?.courses?.course_id) {
+  mapping[r.courses.course_id] = r;
+}
+
+});
+
+setAppliedMap(mapping);
+
     } catch (err) {
       console.error("Failed to fetch data:", err);
     }
@@ -96,7 +104,8 @@ export default function Courses() {
     e.stopPropagation(); 
     try {
       const res = await api.get(`/courses/${course.course_id}/public-enrollments`);
-      const list = res.data || [];
+      const list = Array.isArray(res.data) ? res.data : [];
+
       
       // 1. Calculate how many are actually ENROLLED in the list
       const enrolled = list.filter(r => r.status === 'ENROLLED').length;

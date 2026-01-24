@@ -7,7 +7,8 @@ export default function StudentTimetable() {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("personal");
 
-  const user = JSON.parse(sessionStorage.getItem("user")) || { id: "default" };
+  // ✅ FIX 1: use localStorage consistently
+  const user = JSON.parse(localStorage.getItem("user"));
   const CURRENT_SESSION = "2025-II";
 
   const TIMES = [
@@ -83,31 +84,46 @@ export default function StudentTimetable() {
     "Friday-6:00-6:50": "HSPE",
   };
 
+  // ✅ FIX 2: safe fetch + no infinite loading
   useEffect(() => {
+    if (!user || !user.id) {
+      setLoading(false);
+      setError("Session expired. Please login again.");
+      return;
+    }
+
     setLoading(true);
     api
       .get("/student/records", {
         params: { student_id: user.id, session: CURRENT_SESSION },
       })
       .then((res) => {
-        const data = res.data.records || res.data;
-        setEnrolled((Array.isArray(data) ? data : []).filter(r => r.status === "ENROLLED"));
+        const records = res.data?.records || [];
+        setEnrolled(records.filter(r => r.status === "ENROLLED"));
+        setError(null);
       })
-      .catch(() => setError("Failed to load timetable"))
+      .catch(() => {
+        setError("Failed to load timetable");
+      })
       .finally(() => setLoading(false));
-  }, [user.id]);
+  }, [user?.id]);
 
   const getStudentCourseAtSlot = (day, time) => {
     if (time === "lunch") return null;
     const expected = GENERIC_TIMETABLE[`${day}-${time}`];
-    return enrolled.find(c => {
-      const slot = c.courses?.slot;
+    return enrolled.find(r => {
+      const slot = r.courses?.slot;
       return slot && expected && slot.split(" ")[0] === expected.split(" ")[0];
     });
   };
 
-  if (loading) return <div className="p-10 text-gray-500">Loading academic records...</div>;
-  if (error) return <div className="p-10 text-red-600 font-bold">{error}</div>;
+  if (loading) {
+    return <div className="p-10 text-gray-500">Loading academic records...</div>;
+  }
+
+  if (error) {
+    return <div className="p-10 text-red-600 font-bold">{error}</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -156,15 +172,15 @@ export default function StudentTimetable() {
                   {t.label}{t.isTutorial ? " (Tut)" : ""}
                 </td>
                 {DAYS.map(day => {
-                  const c = getStudentCourseAtSlot(day, t.value);
-                  const g = GENERIC_TIMETABLE[`${day}-${t.value}`];
+                  const course = getStudentCourseAtSlot(day, t.value);
+                  const generic = GENERIC_TIMETABLE[`${day}-${t.value}`];
                   return (
                     <td key={day + t.value} className="border border-black p-2 text-center">
                       {t.value === "lunch"
                         ? "Break"
                         : viewMode === "personal"
-                        ? c ? c.courses.course_code : "—"
-                        : g || "—"}
+                        ? course ? course.courses.course_code : "—"
+                        : generic || "—"}
                     </td>
                   );
                 })}
