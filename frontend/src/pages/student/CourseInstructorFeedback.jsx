@@ -10,7 +10,8 @@ const LIKERT5 = [
 ];
 
 export default function CourseInstructorFeedback() {
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  // CHANGED: sessionStorage -> localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
 
   const [loading, setLoading] = useState(true);
   const [options, setOptions] = useState([]);
@@ -43,6 +44,7 @@ export default function CourseInstructorFeedback() {
   }, [selectedKey, options]);
 
   useEffect(() => {
+    if (!user || !user.id) return;
     setLoading(true);
     api
       .get("/student/feedback/options", {
@@ -51,7 +53,7 @@ export default function CourseInstructorFeedback() {
       .then((res) => setOptions(res.data || []))
       .catch(() => setOptions([]))
       .finally(() => setLoading(false));
-  }, [user.id]);
+  }, [user?.id]);
 
   const setQ = (key, value) => setAnswers((p) => ({ ...p, [key]: value }));
 
@@ -118,6 +120,8 @@ export default function CourseInstructorFeedback() {
       alert(e?.response?.data?.message || e?.response?.data?.error || "Submit failed.");
     }
   };
+
+  if (!user) return <p>Loading session...</p>;
 
   if (loading) {
     return <p className="text-gray-600">Loading feedback form...</p>;
@@ -327,4 +331,3 @@ function QuestionLikert({ label, value, onChange }) {
     </div>
   );
 }
-

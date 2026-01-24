@@ -14,18 +14,17 @@ api.interceptors.request.use(
   (config) => {
     /**
      * Retrieve User Data
-     * We try to be flexible here because authController sends 'sessionId' (camelCase)
-     * but some parts of the app might expect 'session_id' (snake_case).
+     * Changed to localStorage for persistent sessions (retains login across tabs/windows).
      */
     let user = null;
     try {
-      const storedUser = sessionStorage.getItem("user");
+      const storedUser = localStorage.getItem("user");
       if (storedUser) {
         user = JSON.parse(storedUser);
       }
     } catch (error) {
       console.error("Failed to parse user session:", error);
-      sessionStorage.removeItem("user"); // Clear corrupted data
+      localStorage.removeItem("user"); // Clear corrupted data
     }
 
     if (user) {
@@ -60,8 +59,8 @@ api.interceptors.response.use(
       if (window.location.pathname !== "/" && window.location.pathname !== "/login") {
         console.warn("Session expired. Logging out...");
         
-        // Clear local session data
-        sessionStorage.removeItem("user");
+        // Clear local session data (Changed to localStorage)
+        localStorage.removeItem("user");
         
         // Optional: Alert the user
         // alert("Your session has expired. Please login again.");

@@ -1,5 +1,5 @@
 const supabase = require('../supabaseClient');
-const { sendOTPEmail } = require('../utils/mailer');
+const { sendOTPEmail } = require('../utils/mailer'); // Use centralized mailer
 const crypto = require('crypto');
 
 /* =====================================================
@@ -75,9 +75,10 @@ exports.requestOTP = async (req, res) => {
       return res.status(500).json({ error: "Failed to store OTP." });
     }
 
-    // 4. Send Email (Track Time)
+    // 4. Send Email (Now Awaited)
     console.time(`Email-${email}`);
-     sendOTPEmail(email, otp);
+    // We await this so we don't send "Success" if email actually fails
+    await sendOTPEmail(email, otp);
     console.timeEnd(`Email-${email}`);
 
     res.json({ message: "OTP sent successfully." });
@@ -174,6 +175,7 @@ exports.requestSignupOTP = async (req, res) => {
     await supabase.from('otp_store').delete().eq('email', email);
     await supabase.from('otp_store').insert([{ email, otp_code: otp }]);
 
+    // Await email here too
     await sendOTPEmail(email, otp);
 
     res.json({

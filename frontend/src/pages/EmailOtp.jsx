@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import logo from "../assets/images/iit_ropar_logo.jpg";
@@ -7,6 +7,22 @@ export default function EmailOtp() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  /* =========================================================
+     ✅ AUTO-LOGIN CHECK
+     If user exists in storage, redirect to dashboard immediately
+  ========================================================= */
+  
+  useEffect(() => {
+    
+    const user = localStorage.getItem("user");
+    
+    if (user) {
+      
+      navigate("/dashboard", { replace: true });
+    }
+    
+  }, [navigate]);
 
   const sendOtp = async () => {
     if (!email) {

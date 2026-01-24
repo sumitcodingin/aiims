@@ -17,12 +17,13 @@ export default function VerifyOtp() {
 
   /* ===============================
      Persist email (refresh safe)
+     Changed to localStorage to survive tab close/reopen during OTP flow
   =============================== */
   useEffect(() => {
     if (emailFromState) {
-      sessionStorage.setItem("otp_email", emailFromState);
+      localStorage.setItem("otp_email", emailFromState);
     } else {
-      const savedEmail = sessionStorage.getItem("otp_email");
+      const savedEmail = localStorage.getItem("otp_email");
       if (savedEmail) setEmail(savedEmail);
     }
   }, [emailFromState]);
@@ -99,18 +100,17 @@ export default function VerifyOtp() {
       const { sessionId, user } = res.data;
 
       // 2. CONSTRUCT A SINGLE SESSION OBJECT
-      // We merge sessionId INTO the user object so api.js can find it easily.
       const sessionUser = {
-        ...user,             // properties: id, name, role, department
-        user_id: user.id,    // Normalize ID for safety (some files check user_id)
-        sessionId: sessionId // CRITICAL: Include session ID in the main object
+        ...user,             
+        user_id: user.id,    
+        sessionId: sessionId 
       };
 
-      // 3. Store the COMPLETE object in sessionStorage
-      sessionStorage.setItem("user", JSON.stringify(sessionUser));
+      // 3. Store in localStorage (PERSISTENT SESSION)
+      localStorage.setItem("user", JSON.stringify(sessionUser));
       
       // Clear temporary auth data
-      sessionStorage.removeItem("otp_email");
+      localStorage.removeItem("otp_email");
 
       // 4. Navigate to dashboard
       navigate("/dashboard", { replace: true });
