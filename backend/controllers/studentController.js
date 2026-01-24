@@ -316,14 +316,35 @@ exports.getFeedbackOptions = async (req, res) => {
     const { student_id } = req.query;
     if (!student_id) return res.status(400).json({ error: "student_id required" });
     try {
-        const { data, error } = await supabase.from("enrollments").select(`course_id, courses:courses(course_id, course_code, title, acad_session, faculty_id, instructor:users!courses_faculty_id_fkey(user_id, full_name))`).eq("student_id", student_id).eq("status", "ENROLLED");
+        const currentSession = "2025-II"; // Current academic session
+        const { data, error } = await supabase
+            .from("enrollments")
+            .select(`course_id, courses:courses(course_id, course_code, title, acad_session, faculty_id, instructor:users!courses_faculty_id_fkey(user_id, full_name))`)
+            .eq("student_id", student_id)
+            .eq("status", "ENROLLED");
+        
         if(error) throw error;
-        const options = (data||[]).map(row => {
-            const c = row.courses; if(!c) return null;
-            return { course_id: c.course_id, course_code: c.course_code, title: c.title, acad_session: c.acad_session, instructor_id: c.faculty_id, instructor_name: c.instructor?.full_name || "—" };
-        }).filter(Boolean);
+        
+        const options = (data||[])
+            .filter(row => row.courses && row.courses.acad_session === currentSession) // Filter by current session
+            .map(row => {
+                const c = row.courses;
+                return { 
+                    course_id: c.course_id, 
+                    course_code: c.course_code, 
+                    title: c.title, 
+                    acad_session: c.acad_session, 
+                    instructor_id: c.faculty_id, 
+                    instructor_name: c.instructor?.full_name || "—" 
+                };
+            })
+            .filter(Boolean);
+        
         res.json(options);
-    } catch(err) { res.status(500).json({ error: "Failed." }); }
+    } catch(err) { 
+        console.error("getFeedbackOptions error:", err);
+        res.status(500).json({ error: "Failed." }); 
+    }
 };
 
 // ===================================

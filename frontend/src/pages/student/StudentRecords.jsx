@@ -217,7 +217,22 @@ export default function StudentRecords() {
                 ([session]) =>
                   semesterFilter === "ALL" || session === semesterFilter
               )
-              .map(([session, data]) => (
+              .map(([session, data]) => {
+                // Apply search and status filters to each semester's records
+                const filteredSemesterRecords = (data.records || []).filter((r) => {
+                  if (!r.courses) return false;
+
+                  const matchesSearch =
+                    r.courses.course_code.toLowerCase().includes(search.toLowerCase()) ||
+                    r.courses.title.toLowerCase().includes(search.toLowerCase());
+
+                  const matchesStatus =
+                    statusFilter === "ALL" || r.status === statusFilter;
+
+                  return matchesSearch && matchesStatus;
+                });
+
+                return (
                 <div key={session} className="mb-8">
                   <div className="bg-gray-900 text-white px-4 py-2 text-sm">
                     Academic session: {session} &nbsp;|&nbsp;
@@ -229,34 +244,43 @@ export default function StudentRecords() {
 
                   <table className="w-full text-sm border-collapse">
                     <tbody>
-                      {data.records.map((r, i) => (
-                        <tr
-                          key={r.enrollment_id}
-                          className={i % 2 === 0 ? "bg-white" : "bg-gray-200"}
-                        >
-                          <td className="px-3 py-2 w-10">{i + 1}</td>
-                          <td className="px-3 py-2">
-                            <b>{r.courses.course_code}</b> – {r.courses.title}
-                          </td>
-                          <td className="px-3 py-2">Credit</td>
-                          <td className="px-3 py-2">
-                            <span
-                              className={`px-2 py-1 text-xs rounded ${statusColor(
-                                r.status
-                              )}`}
-                            >
-                              {statusText(r.status)}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-center font-semibold">
-                            {r.grade || "—"}
+                      {filteredSemesterRecords.length > 0 ? (
+                        filteredSemesterRecords.map((r, i) => (
+                          <tr
+                            key={r.enrollment_id}
+                            className={i % 2 === 0 ? "bg-white" : "bg-gray-200"}
+                          >
+                            <td className="px-3 py-2 w-10">{i + 1}</td>
+                            <td className="px-3 py-2">
+                              <b>{r.courses.course_code}</b> – {r.courses.title}
+                            </td>
+                            <td className="px-3 py-2">Credit</td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={`px-2 py-1 text-xs rounded ${statusColor(
+                                  r.status
+                                )}`}
+                              >
+                                {statusText(r.status)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-center font-semibold">
+                              {r.grade || "—"}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="5" className="px-3 py-2 text-center text-gray-500">
+                            No records found matching the filters.
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
-              ))}
+              );
+              })}
         </>
       )}
     </div>

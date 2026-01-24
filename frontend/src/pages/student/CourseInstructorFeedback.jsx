@@ -12,6 +12,7 @@ const LIKERT5 = [
 export default function CourseInstructorFeedback() {
   // CHANGED: sessionStorage -> localStorage
   const user = JSON.parse(localStorage.getItem("user"));
+  const CURRENT_SESSION = "2025-II";
 
   const [loading, setLoading] = useState(true);
   const [options, setOptions] = useState([]);
@@ -50,7 +51,13 @@ export default function CourseInstructorFeedback() {
       .get("/student/feedback/options", {
         params: { student_id: user.id },
       })
-      .then((res) => setOptions(res.data || []))
+      .then((res) => {
+        // Filter to only current semester courses
+        const currentSemesterCourses = (res.data || []).filter(
+          (course) => course.acad_session === CURRENT_SESSION
+        );
+        setOptions(currentSemesterCourses);
+      })
       .catch(() => setOptions([]))
       .finally(() => setLoading(false));
   }, [user?.id]);
@@ -73,7 +80,7 @@ export default function CourseInstructorFeedback() {
     if (!feedbackType) return "Feedback type is required.";
     if (!selected) return "Please select the course instructor.";
     for (const k of requiredKeys) {
-      if (!answers[k]) return "Please answer all mandatory questions (*1 to *10).";
+      if (!answers[k]) return "Please answer all questions (1 to 10).";
     }
     return null;
   };
@@ -134,7 +141,7 @@ export default function CourseInstructorFeedback() {
       <div className="text-sm text-gray-700 mb-6">
         <p className="font-semibold mb-2">Please note the following before submitting:</p>
         <ul className="list-disc pl-5 space-y-1">
-          <li>All fields marked with a &apos;*&apos; are mandatory.</li>
+          <li>All options below are necessary to fill.</li>
           <li>Feedback for one course instructor can be submitted only once.</li>
           <li>
             When there are more than one instructors teaching a course, please choose only those
@@ -151,7 +158,7 @@ export default function CourseInstructorFeedback() {
           <div className="grid md:grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-semibold mb-1">
-                * Feedback type
+                Feedback type
               </label>
               <select
                 className="border px-3 py-2 rounded w-full"
@@ -159,12 +166,13 @@ export default function CourseInstructorFeedback() {
                 onChange={(e) => setFeedbackType(e.target.value)}
               >
                 <option value="Mid-sem">Mid-sem</option>
+                <option value="End-sem">End-sem</option>
               </select>
             </div>
 
             <div>
               <label className="block text-sm font-semibold mb-1">
-                * Select the course instructor
+                Select the course instructor
               </label>
               <select
                 className="border px-3 py-2 rounded w-full"
@@ -186,60 +194,60 @@ export default function CourseInstructorFeedback() {
 
           {/* Questions */}
           <QuestionYesNo
-            label="*1: Instructor informed the evaluation criteria within the first two weeks of the semester."
+            label="1: Instructor informed the evaluation criteria within the first two weeks of the semester."
             value={answers.q1}
             onChange={(v) => setQ("q1", v)}
           />
           <QuestionYesNo
-            label="*2: Number of Lectures taken by course instructor were Equal to (or More than) the total number of scheduled lectures."
+            label="2: Number of Lectures taken by course instructor were Equal to (or More than) the total number of scheduled lectures."
             value={answers.q2}
             onChange={(v) => setQ("q2", v)}
           />
 
           <QuestionLikert
-            label="*3: The instructor adapted professional practices such as, covering the whole syllabus, lectures taken by him not by TAs, treating students equally, keeping methods of evaluation consistent and clear etc. in the class."
+            label="3: The instructor adapted professional practices such as, covering the whole syllabus, lectures taken by him not by TAs, treating students equally, keeping methods of evaluation consistent and clear etc. in the class."
             value={answers.q3}
             onChange={(v) => setQ("q3", v)}
           />
           <QuestionLikert
-            label="*4: The instructor was sincere (timely returning the quizzes/ exam answer-scripts, etc)."
+            label="4: The instructor was sincere (timely returning the quizzes/ exam answer-scripts, etc)."
             value={answers.q4}
             onChange={(v) => setQ("q4", v)}
           />
           <QuestionLikert
-            label="*5: The instructor had command over the subject and he/she came prepared (e.g. he/she could explain the concepts well, etc.)."
+            label="5: The instructor had command over the subject and he/she came prepared (e.g. he/she could explain the concepts well, etc.)."
             value={answers.q5}
             onChange={(v) => setQ("q5", v)}
           />
           <QuestionLikert
-            label="*6: The objectives of the course were achieved."
+            label="6: The objectives of the course were achieved."
             value={answers.q6}
             onChange={(v) => setQ("q6", v)}
           />
           <QuestionLikert
-            label="*7: Instructor was effective in delivery of lectures (Board work or Slides used for teaching was effective, clear and audible voice and English comprehension etc.)"
+            label="7: Instructor was effective in delivery of lectures (Board work or Slides used for teaching was effective, clear and audible voice and English comprehension etc.)"
             value={answers.q7}
             onChange={(v) => setQ("q7", v)}
           />
           <QuestionLikert
-            label="*8: Quality of questions raised in exams/assignments/classes by the instructor was adequate."
+            label="8: Quality of questions raised in exams/assignments/classes by the instructor was adequate."
             value={answers.q8}
             onChange={(v) => setQ("q8", v)}
           />
           <QuestionLikert
-            label="*9: Instructor made efforts to encourage discussion and class participation in order to enhance students’ learning experience and progress."
+            label="9: Instructor made efforts to encourage discussion and class participation in order to enhance students' learning experience and progress."
             value={answers.q9}
             onChange={(v) => setQ("q9", v)}
           />
           <QuestionLikert
-            label="*10: Instructor could explain satisfactorily to the queries raised by the students."
+            label="10: Instructor could explain satisfactorily to the queries raised by the students."
             value={answers.q10}
             onChange={(v) => setQ("q10", v)}
           />
 
           <div className="mt-6">
             <label className="block text-sm font-semibold mb-1">
-              *11: Any further suggestion or comment that you would like to share with respect to the instructor:
+              11: Any further suggestion or comment that you would like to share with respect to the instructor:
             </label>
             <textarea
               className="border p-3 rounded w-full min-h-[120px]"
