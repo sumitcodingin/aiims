@@ -11,8 +11,8 @@ const DEPARTMENTS = [
 ];
 
 const SLOTS = [
-  "Pc-1", "Pc-2", "Pc-3", "Pc-4", "Pc-5",
-  "Pc-6", "Pc-7", "Pc-8", "Pc-9", "Pc-10"
+  "PC-1", "PC-2", "PC-3", "PC-4", "HSPE",
+  "HSME", "PCE-1", "PCE-2", "PCE-3", "PCE-4"
 ];
 
 export default function FloatCourse({ onSuccess }) {

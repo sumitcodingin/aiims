@@ -20,6 +20,8 @@ exports.searchCourses = async (req, res) => {
         acad_session,
         capacity,
         enrolled_count,
+        credits,
+        slot,
         ${instructorSelect}
       `)
       // Students see ONLY approved courses

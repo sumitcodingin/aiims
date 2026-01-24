@@ -191,7 +191,7 @@ exports.getStudentRecords = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('enrollments')
-      .select(`enrollment_id, status, grade, course_id, courses(course_id, course_code, title, acad_session, credits)`)
+      .select(`enrollment_id, status, grade, course_id, courses(course_id, course_code, title, acad_session, credits, slot)`)
       .eq('student_id', student_id)
       .eq('courses.acad_session', session)
       .order('enrollment_id', { ascending: false });
