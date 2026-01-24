@@ -5,6 +5,7 @@ import logo from "../assets/images/iit_ropar_logo.jpg";
 
 export default function EmailOtp() {
   const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const sendOtp = async () => {
@@ -18,27 +19,24 @@ export default function EmailOtp() {
       return;
     }
 
+    setLoading(true);
     try {
       await api.post("/auth/request-otp", { email });
       navigate("/verify", { state: { email } });
     } catch (err) {
-      alert(
-        err.response?.data?.error ||
-          "Failed to send OTP. Please try again."
-      );
+      console.error(err);
+      alert(err.response?.data?.error || "Failed to send OTP.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-gray-100">
       
-      {/* ================= LEFT BRANDING PANEL ================= */}
+      {/* ================= LEFT PANEL ================= */}
       <div className="hidden lg:flex flex-col justify-center items-center bg-white border-r border-gray-300 px-12">
-        <img
-          src={logo}
-          alt="IIT Ropar Logo"
-          className="w-40 mb-6"
-        />
+        <img src={logo} alt="IIT Ropar Logo" className="w-40 mb-6" />
         <h1 className="text-3xl font-bold text-gray-900 text-center">
           Indian Institute of Technology Ropar
         </h1>
@@ -47,54 +45,57 @@ export default function EmailOtp() {
         </p>
       </div>
 
-      {/* ================= RIGHT LOGIN FORM ================= */}
+      {/* ================= RIGHT FORM ================= */}
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-2xl bg-white border border-gray-300 p-10">
-          
-          {/* Header */}
-          <h2 className="text-2xl font-bold mb-1">
-            Login
-          </h2>
-          <p className="text-sm text-gray-600 mb-8">
-            Sign in using your institute email
-          </p>
+          <h2 className="text-2xl font-bold mb-1">Login</h2>
+          <p className="text-sm text-gray-600 mb-8">Sign in using your institute email</p>
 
-          {/* ================= LOGIN DETAILS ================= */}
           <div className="mb-10">
             <h3 className="text-sm font-bold text-gray-800 mb-4 uppercase tracking-wide">
               Institute Login
             </h3>
-
             <input
               type="email"
-              className="w-full border border-gray-300 px-3 py-2 text-sm"
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black transition"
               placeholder="Institute Email (@iitrpr.ac.in)"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
             />
           </div>
 
-          {/* ================= NAVIGATION ================= */}
           <div className="text-center mb-6 text-sm text-gray-600">
             Don’t have an account?{" "}
             <span
-              onClick={() => navigate("/signup")}
-              className="text-blue-600 cursor-pointer hover:underline font-medium"
+              onClick={() => !loading && navigate("/signup")}
+              className={`text-blue-600 cursor-pointer hover:underline font-medium ${loading ? 'pointer-events-none opacity-50' : ''}`}
             >
               Create an account
             </span>
           </div>
 
-          {/* ================= ACTION ================= */}
           <div className="flex justify-center">
             <button
               onClick={sendOtp}
-              className="px-12 py-2 bg-black text-white text-sm font-semibold hover:bg-gray-900 transition"
+              disabled={loading}
+              className={`px-12 py-2 text-white text-sm font-semibold transition flex items-center gap-2
+                ${loading ? "bg-gray-500 cursor-not-allowed" : "bg-black hover:bg-gray-900"}
+              `}
             >
-              Send OTP
+              {loading ? (
+                <>
+                  <span>Sending...</span>
+                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </>
+              ) : (
+                "Send OTP"
+              )}
             </button>
           </div>
-
         </div>
       </div>
     </div>
