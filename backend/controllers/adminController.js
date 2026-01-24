@@ -2,6 +2,53 @@ const supabase = require('../supabaseClient');
 const { sendNotificationEmail } = require('../utils/mailer');
 const { sendCustomEmail } = require('../utils/sendCustomEmail');
 
+/* =====================================================
+   HELPER: Find Advisor with Minimum Engagements
+===================================================== */
+const findLeastLoadedAdvisor = async (department) => {
+  try {
+    console.log(`[Advisor] Finding least loaded advisor for department: ${department}`);
+    
+    const { data: advisors, error: advisorError } = await supabase
+      .from('users')
+      .select('user_id')
+      .eq('role', 'Advisor')
+      .eq('department', department);
+
+    console.log(`[Advisor] Found ${advisors ? advisors.length : 0} advisors, Error: ${advisorError ? advisorError.message : 'None'}`);
+    
+    if (advisorError || !advisors || advisors.length === 0) {
+      console.warn(`[Advisor] No advisors available for department: ${department}`);
+      return null;
+    }
+
+    const advisorCounts = await Promise.all(
+      advisors.map(async (advisor) => {
+        const { count, error } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .eq('advisor_id', advisor.user_id)
+          .in('role', ['Student', 'Instructor']);
+
+        if (error) return { advisor_id: advisor.user_id, count: Infinity };
+        return { advisor_id: advisor.user_id, count: count || 0 };
+      })
+    );
+
+    console.log(`[Advisor] Advisor loads: ${JSON.stringify(advisorCounts)}`);
+
+    const leastLoaded = advisorCounts.reduce((min, current) => {
+      return current.count < min.count ? current : min;
+    }, advisorCounts[0]);
+
+    console.log(`[Advisor] Selected least loaded advisor: ${leastLoaded?.advisor_id} with count: ${leastLoaded?.count}`);
+    return leastLoaded?.advisor_id || null;
+  } catch (err) {
+    console.error('FIND LEAST LOADED ADVISOR ERROR:', err);
+    return null; 
+  }
+};
+
 // ============================
 // 1. Get All Users
 // ============================
@@ -31,10 +78,10 @@ exports.updateUserStatus = async (req, res) => {
   const { userId, action } = req.body; // action: 'APPROVE', 'REJECT', 'BLOCK'
 
   try {
-    // 1. Fetch user to get Email
+    // 1. Fetch user to get Email, Role, and Department
     const { data: user } = await supabase
       .from('users')
-      .select('email, account_status')
+      .select('email, account_status, role, department')
       .eq('user_id', userId)
       .single();
 
@@ -57,10 +104,25 @@ exports.updateUserStatus = async (req, res) => {
       return res.status(400).json({ error: "Invalid action" });
     }
 
-    // 2. Update DB
+    // 2. Update DB and assign advisor if approving Student or Instructor
+    let updatePayload = { account_status: newStatus };
+    
+    if (action === 'APPROVE' && (user.role === 'Student' || user.role === 'Instructor')) {
+      // Find and assign least loaded advisor
+      console.log(`[Admin] Assigning advisor for ${user.role} in department: ${user.department}`);
+      const advisorId = await findLeastLoadedAdvisor(user.department);
+      console.log(`[Admin] Found advisor ID: ${advisorId}`);
+      if (advisorId) {
+        updatePayload.advisor_id = advisorId;
+        console.log(`[Admin] Payload with advisor: ${JSON.stringify(updatePayload)}`);
+      } else {
+        console.warn(`[Admin] No advisor found for department: ${user.department}`);
+      }
+    }
+
     const { error } = await supabase
       .from('users')
-      .update({ account_status: newStatus })
+      .update(updatePayload)
       .eq('user_id', userId);
 
     if (error) throw error;
