@@ -3,7 +3,7 @@ import api from "../../services/api";
 import { Mail, Video, Calendar, CheckSquare, Square, Clock } from "lucide-react";
 
 export default function MyStudents() {
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  const user = JSON.parse(localStorage.getItem("user"));
 
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);

@@ -8,10 +8,10 @@ import MyStudents from "./advisor/MyStudents"; // ✅ NEW IMPORT
 
 export default function AdvisorDashboard() {
   const [activeTab, setActiveTab] = useState("students");
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  const user = JSON.parse(localStorage.getItem("user"));
 
   const logout = () => {
-    sessionStorage.removeItem("user");
+    localStorage.removeItem("user");
     window.location.href = "/";
   };
 

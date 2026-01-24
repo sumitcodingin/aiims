@@ -2,7 +2,7 @@ import collegeLogo from "../../assets/images/iit_ropar_logo.jpg";
 
 
 export default function AdvisorProfile() {
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  const user = JSON.parse(localStorage.getItem("user"));
 
   return (
     <div className="max-w-6xl mx-auto bg-white p-10 border border-gray-400">

@@ -1,13 +1,11 @@
 import { useState } from "react";
-
 import InstructorApprovals from "./instructor/InstructorApprovals";
 import FloatCourse from "./instructor/FloatCourse";
 import InstructorFeedback from "./instructor/InstructorFeedback";
 import InstructorGrading from "./instructor/InstructorGrading";
 import AcademicEvents from "./student/AcademicEvents";
 import AllCourses from "./instructor/AllCourses";
-import InstructorProfile from "./instructor/InstructorProfile";
-import InstructorProjects from "./instructor/InstructorProjects"; // ✅ NEW IMPORT
+import InstructorProfile from "./instructor/InstructorProfile"; // ✅ NEW IMPORT
 
 export default function InstructorDashboard() {
   const [activeTab, setActiveTab] = useState("approvals");
@@ -48,14 +46,6 @@ export default function InstructorDashboard() {
               onClick={() => setActiveTab("float")}
             >
               Float Course
-            </NavBtn>
-
-            {/* ✅ NEW PROJECTS TAB */}
-            <NavBtn
-              active={activeTab === "projects"}
-              onClick={() => setActiveTab("projects")}
-            >
-              Research Projects
             </NavBtn>
 
             <NavBtn
@@ -113,14 +103,13 @@ export default function InstructorDashboard() {
           <FloatCourse onSuccess={() => setActiveTab("approvals")} />
         )}
 
-        {activeTab === "projects" && <InstructorProjects />}
-
         {activeTab === "feedback" && <InstructorFeedback />}
 
         {activeTab === "grading" && <InstructorGrading />}
 
         {activeTab === "academic-events" && <AcademicEvents />}
 
+        {/* ✅ DOCUMENT-STYLE PROFILE */}
         {activeTab === "profile" && <InstructorProfile />}
       </main>
     </div>
@@ -133,11 +122,12 @@ function NavBtn({ active, children, ...props }) {
   return (
     <button
       {...props}
-      className={`text-left px-6 py-3 text-sm transition-colors ${
-        active
-          ? "bg-neutral-800 text-white font-medium"
-          : "text-neutral-300 hover:bg-neutral-800"
-      }`}
+      className={`text-left px-6 py-3 text-sm transition-colors
+        ${
+          active
+            ? "bg-neutral-800 text-white font-medium"
+            : "text-neutral-300 hover:bg-neutral-800"
+        }`}
     >
       {children}
     </button>
