@@ -5,10 +5,13 @@ import { Lock, Unlock, Settings } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("PENDING"); // Default to Pending Users
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  
+  // 1. FIX: Read from localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
 
   const logout = () => {
-    sessionStorage.removeItem("user");
+    // 2. FIX: Clear localStorage
+    localStorage.removeItem("user");
     window.location.href = "/";
   };
 
