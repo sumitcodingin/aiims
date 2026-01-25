@@ -15,11 +15,13 @@ export default function Courses() {
   });
   
   const [selectedCourse, setSelectedCourse] = useState(null);
+  // NEW: State for Enrollment Type selection
+  const [selectedEnrollType, setSelectedEnrollType] = useState("CREDIT");
+
   const [enrollmentList, setEnrollmentList] = useState([]);
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
   const [viewingEnrollmentMeta, setViewingEnrollmentMeta] = useState({ title: "", enrolledCount: 0, capacity: 0 });
 
-  // NEW: State for credits
   const [creditsUsed, setCreditsUsed] = useState(0);
   const CREDIT_LIMIT = 24;
 
@@ -51,7 +53,6 @@ export default function Courses() {
       const mapping = {};
       const recordsData = recordsRes.data.records || recordsRes.data;
       
-      // Update Credits Used
       if (recordsRes.data.creditsUsed !== undefined) {
           setCreditsUsed(recordsRes.data.creditsUsed);
       }
@@ -82,10 +83,12 @@ export default function Courses() {
       await api.post("/student/apply", {
         student_id: user.id,
         course_id,
+        enrollment_type: selectedEnrollType // Send the selected type
       });
       alert("Enrollment request submitted.");
       fetchData(); 
       setSelectedCourse(null);
+      setSelectedEnrollType("CREDIT"); // Reset to default
     } catch (err) {
       alert(err.response?.data?.error || "Application failed.");
     }
@@ -210,7 +213,7 @@ export default function Courses() {
             return (
               <div 
                 key={c.course_id} 
-                onClick={() => setSelectedCourse(c)}
+                onClick={() => { setSelectedCourse(c); setSelectedEnrollType("CREDIT"); }}
                 className="bg-white p-4 shadow rounded-none border hover:shadow-lg transition cursor-pointer relative"
               >
                 <div className="flex justify-between items-start mb-2">
@@ -220,9 +223,16 @@ export default function Courses() {
                     <p className="text-sm text-gray-700">Instructor: {c.instructor?.full_name || "—"}</p>
                   </div>
                   {enrollment && (
-                    <span className={`px-2 py-1 text-xs font-bold rounded-none ${statusColor(status)}`}>
-                      {statusText(status)}
-                    </span>
+                    <div className="flex flex-col items-end">
+                      <span className={`px-2 py-1 text-xs font-bold rounded-none ${statusColor(status)}`}>
+                        {statusText(status)}
+                      </span>
+                      {enrollment.enrollment_type && (
+                        <span className="text-[10px] text-gray-500 font-semibold mt-1">
+                          {enrollment.enrollment_type}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -234,10 +244,15 @@ export default function Courses() {
                     View
                   </button>
 
-                  {/* Enroll Button with Limit Logic */}
                   {!enrollment && (
                       <button 
-                        onClick={(e) => { e.stopPropagation(); if(canApply) apply(c.course_id); }}
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            if(canApply) {
+                                setSelectedCourse(c);
+                                setSelectedEnrollType("CREDIT");
+                            }
+                        }}
                         disabled={!canApply}
                         className={`px-4 py-1 rounded-none text-sm transition-all font-semibold border ${
                             canApply 
@@ -268,10 +283,28 @@ export default function Courses() {
           <div className="bg-white rounded-none shadow-xl max-w-lg w-full p-6 relative">
             <button onClick={() => setSelectedCourse(null)} className="absolute top-4 right-4 text-gray-500 hover:text-black text-xl font-bold">&times;</button>
             <h2 className="text-2xl font-bold mb-1 text-black">{selectedCourse.title}</h2>
+            
             <div className="space-y-3 mb-6 mt-4">
                <div className="flex justify-between border-b pb-2"><span className="font-bold">Credits:</span><span>{selectedCourse.credits}</span></div>
                <div className="flex justify-between border-b pb-2"><span className="font-bold">Instructor:</span><span>{selectedCourse.instructor?.full_name}</span></div>
                <div className="flex justify-between border-b pb-2"><span className="font-bold">Slot:</span><span>{selectedCourse.slot || "N/A"}</span></div>
+            
+               {/* NEW: Enrollment Type Selection inside Modal */}
+               {!appliedMap[selectedCourse.course_id] && (
+                   <div className="flex flex-col mt-4 border-t pt-4">
+                       <label className="text-sm font-bold text-gray-700 mb-2">Select Enrollment Type:</label>
+                       <select 
+                           value={selectedEnrollType}
+                           onChange={(e) => setSelectedEnrollType(e.target.value)}
+                           className="border p-2 rounded-none bg-white text-sm"
+                       >
+                           <option value="CREDIT">Credit (Standard)</option>
+                           <option value="AUDIT">Audit (No Grade)</option>
+                           <option value="CONCENTRATION">Credit for Concentration</option>
+                           <option value="MINOR">Credit for Minor</option>
+                       </select>
+                   </div>
+               )}
             </div>
             
             <div className="flex gap-3 justify-end mt-4">
@@ -289,7 +322,7 @@ export default function Courses() {
                                         : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
                                     }`}
                                 >
-                                    {limitReached ? "Credit Limit Reached" : "Enroll Now"}
+                                    {limitReached ? "Credit Limit Reached" : "Confirm Enrollment"}
                                 </button>
                             )}
                             {canDrop && (

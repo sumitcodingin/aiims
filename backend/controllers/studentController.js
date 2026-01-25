@@ -28,6 +28,7 @@ const updateCourseEnrolledCount = async (course_id) => {
    Helper: Check Credit Limit (Max 24)
 =================================================== */
 const checkCreditLimit = async (student_id, new_course_credits, session) => {
+    // Fetch all courses currently ENROLLED or PENDING for this session
     const { data: enrollments, error } = await supabase
         .from('enrollments')
         .select(`
@@ -74,11 +75,19 @@ const calculateSGPA = (records) => {
 };
 
 // ===================================
-// 1. Apply for a course
+// 1. Apply for a course (UPDATED)
 // ===================================
 exports.applyForCourse = async (req, res) => {
-  const { student_id, course_id } = req.body;
+  const { student_id, course_id, enrollment_type } = req.body; // Added enrollment_type
+
   try {
+    // Validate enrollment type
+    const validTypes = ['CREDIT', 'AUDIT', 'CONCENTRATION', 'MINOR'];
+    if (!validTypes.includes(enrollment_type)) {
+        return res.status(400).json({ error: "Invalid enrollment type selected." });
+    }
+
+    // 1. Fetch details of the course
     const { data: course, error: courseError } = await supabase
       .from('courses')
       .select('title, slot, acad_session, credits')
@@ -87,6 +96,7 @@ exports.applyForCourse = async (req, res) => {
 
     if (courseError || !course) return res.status(404).json({ error: "Course not found." });
 
+    // 2. CHECK CREDIT LIMIT (Only if not Audit, though audits usually count towards load, keeping logic simple here)
     if (course.credits > 0) {
         const canEnroll = await checkCreditLimit(student_id, course.credits, course.acad_session);
         if (!canEnroll) {
@@ -96,6 +106,7 @@ exports.applyForCourse = async (req, res) => {
 
     const { data: student } = await supabase.from('users').select('full_name, email').eq('user_id', student_id).single();
 
+    // 3. Check existing application
     const { data: existing } = await supabase
         .from('enrollments')
         .select('enrollment_id, status')
@@ -111,6 +122,7 @@ exports.applyForCourse = async (req, res) => {
       }
     }
 
+    // 4. Check for Slot Collision
     const { data: enrolledCourses, error: enrolledError } = await supabase
         .from('enrollments')
         .select(`
@@ -134,13 +146,21 @@ exports.applyForCourse = async (req, res) => {
         }
     }
 
+    // 5. Proceed with Insert / Update
+    const payload = {
+        student_id, 
+        course_id, 
+        status: 'PENDING_INSTRUCTOR_APPROVAL',
+        enrollment_type: enrollment_type // Save the type
+    };
+
     if (existing && ['DROPPED_BY_STUDENT', 'INSTRUCTOR_REJECTED', 'ADVISOR_REJECTED'].includes(existing.status)) {
-        await supabase.from('enrollments').update({ status: 'PENDING_INSTRUCTOR_APPROVAL', grade: null }).eq('enrollment_id', existing.enrollment_id);
+        await supabase.from('enrollments').update({ ...payload, grade: null }).eq('enrollment_id', existing.enrollment_id);
         if (student && course) await sendStatusEmail(student.email, student.full_name, course.title, 'PENDING_INSTRUCTOR_APPROVAL');
         return res.json({ message: 'Re-application submitted.' });
     }
 
-    await supabase.from('enrollments').insert([{ student_id, course_id, status: 'PENDING_INSTRUCTOR_APPROVAL' }]);
+    await supabase.from('enrollments').insert([payload]);
     if (student && course) await sendStatusEmail(student.email, student.full_name, course.title, 'PENDING_INSTRUCTOR_APPROVAL');
     
     res.status(201).json({ message: 'Application submitted.' });
@@ -200,7 +220,7 @@ exports.getStudentRecords = async (req, res) => {
     const { data, error } = await supabase
       .from('enrollments')
       .select(`
-        enrollment_id, status, grade, course_id,
+        enrollment_id, status, grade, course_id, enrollment_type,
         courses ( course_id, course_code, title, acad_session, credits, slot )
       `)
       .eq('student_id', sid)
@@ -210,6 +230,7 @@ exports.getStudentRecords = async (req, res) => {
 
     const filtered = (data || []).filter(r => r.courses && r.courses.acad_session === session);
 
+    // Calculate Credits Used
     let creditsUsed = 0;
     filtered.forEach(r => {
         if (['ENROLLED', 'PENDING_INSTRUCTOR_APPROVAL', 'PENDING_ADVISOR_APPROVAL'].includes(r.status)) {
@@ -288,7 +309,7 @@ exports.getAllStudentRecords = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('enrollments')
-      .select(`enrollment_id, status, grade, course_id, courses(course_id, course_code, title, acad_session, credits)`)
+      .select(`enrollment_id, status, grade, course_id, enrollment_type, courses(course_id, course_code, title, acad_session, credits)`)
       .eq('student_id', student_id)
       .order('courses(acad_session)', { ascending: true });
     
