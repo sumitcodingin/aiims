@@ -90,11 +90,13 @@ export default function StudentDashboard() {
       <main className="ml-64 p-6 min-h-screen overflow-y-auto">
         {activeTab === "courses" && <Courses />}
         {activeTab === "projects" && <StudentProjects />} 
-        {activeTab === "profile" && <StudentProfile />}
+        
         {activeTab === "records" && <StudentRecords />}
         {activeTab === "timetable" && <StudentTimetable />}
-        {activeTab === "feedback" && <CourseInstructorFeedback />}
+        
         {activeTab === "academic-events" && <AcademicEvents />}
+        {activeTab === "feedback" && <CourseInstructorFeedback />}
+        {activeTab === "profile" && <StudentProfile />}
       </main>
     </div>
   );
