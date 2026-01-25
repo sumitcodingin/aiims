@@ -248,12 +248,15 @@ exports.getStudentRecords = async (req, res) => {
 };
 
 // ===================================
-// 4. NEW: Apply for Program (One-Active Rule)
+// 4. NEW: Apply for Program (Updated for Extra Fields)
 // ===================================
 exports.applyForProgram = async (req, res) => {
-    const { student_id, program_type } = req.body;
+    const { student_id, program_type, target_branch, semester } = req.body; // Added params
     try {
-        // 1. Check if student has ANY pending or approved program
+        // 1. Check if student has ANY pending or approved program (Except General B.Tech which is default)
+        // General B.Tech doesn't block other applications if it's the only one, 
+        // BUT logic requested: "if he takes one he should not be able to take any other"
+        // So we strictly check for any non-dropped application.
         const { data: activePrograms, error: fetchError } = await supabase
             .from('student_programs')
             .select('program_type, status')
@@ -264,15 +267,33 @@ exports.applyForProgram = async (req, res) => {
 
         if (activePrograms && activePrograms.length > 0) {
             const current = activePrograms[0];
-            return res.status(400).json({ 
-                error: `You already have an active application: ${current.program_type} (${current.status}). Please drop it before applying for another.` 
-            });
+            // General B.Tech is default, so if they are on it, they can apply for others? 
+            // The prompt says "General Btech should be selected by default... for rest of three if he takes one he should not be able to take any other"
+            // This implies General is the baseline. If they have General, they are "free" to apply for a specialty.
+            // If they have a specialty (Minor/Conc/Intern), they must drop it to switch.
+            
+            if (current.program_type !== 'General B.Tech') {
+                 return res.status(400).json({ 
+                    error: `You already have an active application: ${current.program_type} (${current.status}). Please drop it before applying for another.` 
+                });
+            } else {
+                // If they are on General B.Tech (Default), we can effectively "upgrade" them by deleting the General entry or just letting them apply.
+                // Best approach: If applying for something else, remove "General B.Tech" entry automatically or just ignore it.
+                // Let's remove the "General B.Tech" entry so they only have 1 active program.
+                await supabase.from('student_programs').delete().eq('program_id', current.program_id);
+            }
         }
 
-        // 2. Insert new application
+        // 2. Insert new application with extra fields
         const { error } = await supabase
             .from('student_programs')
-            .insert([{ student_id, program_type, status: 'PENDING' }]);
+            .insert([{ 
+                student_id, 
+                program_type, 
+                status: 'PENDING',
+                target_branch: target_branch || null, // For Minor
+                semester: semester || null // For Internship
+            }]);
 
         if (error) throw error;
         res.status(201).json({ message: "Application submitted successfully." });
