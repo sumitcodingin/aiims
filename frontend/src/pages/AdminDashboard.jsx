@@ -6,11 +6,10 @@ import { Lock, Unlock, Settings } from 'lucide-react';
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("PENDING"); // Default to Pending Users
   
-  // 1. FIX: Read from localStorage
+  // Use localStorage as per previous fixes
   const user = JSON.parse(localStorage.getItem("user"));
 
   const logout = () => {
-    // 2. FIX: Clear localStorage
     localStorage.removeItem("user");
     window.location.href = "/";
   };
@@ -73,7 +72,6 @@ export default function AdminDashboard() {
               Course Management
             </div>
 
-            {/* NEW TAB FOR APPROVALS */}
             <NavBtn
               active={activeTab === "COURSE_APPROVALS"}
               onClick={() => setActiveTab("COURSE_APPROVALS")}
@@ -86,6 +84,18 @@ export default function AdminDashboard() {
               onClick={() => setActiveTab("OFFERINGS")}
             >
               All Offerings
+            </NavBtn>
+
+            {/* NEW SECTION: ACADEMIC PROGRAMS */}
+            <div className="mt-4 px-6 py-2 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+              Academic Programs
+            </div>
+
+            <NavBtn
+              active={activeTab === "PROGRAM_APPROVALS"}
+              onClick={() => setActiveTab("PROGRAM_APPROVALS")}
+            >
+              Program Requests
             </NavBtn>
           </div>
         </div>
@@ -115,11 +125,14 @@ export default function AdminDashboard() {
           <UserList status={activeTab} />
         )}
 
-        {/* NEW: Render Course Approvals */}
+        {/* Render Course Approvals */}
         {activeTab === "COURSE_APPROVALS" && <AdminCourseApprovals />}
 
         {/* Render Course Management */}
         {activeTab === "OFFERINGS" && <AdminCourseList />}
+
+        {/* NEW: Render Program Approvals */}
+        {activeTab === "PROGRAM_APPROVALS" && <AdminProgramApprovals />}
       </main>
     </div>
   );
@@ -486,7 +499,7 @@ function UserList({ status }) {
 }
 
 /* =========================================================
-   COMPONENT: ADMIN COURSE APPROVALS (NEW)
+   COMPONENT: ADMIN COURSE APPROVALS
    ========================================================= */
 function AdminCourseApprovals() {
   const [courses, setCourses] = useState([]);
@@ -761,6 +774,91 @@ function AdminCourseList() {
       )}
     </div>
   );
+}
+
+/* =========================================================
+   COMPONENT 4: PROGRAM APPROVALS (NEW)
+   ========================================================= */
+function AdminProgramApprovals() {
+    const [requests, setRequests] = useState([]);
+
+    const fetchRequests = async () => {
+        try {
+            const res = await api.get("/admin/program-requests");
+            setRequests(res.data || []);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    useEffect(() => {
+        fetchRequests();
+    }, []);
+
+    const handleAction = async (programId, action) => {
+        if (!window.confirm(`${action} this program request?`)) return;
+        try {
+            await api.post("/admin/update-program-status", { programId, action });
+            alert(`Request ${action}D`);
+            fetchRequests();
+        } catch (err) {
+            alert("Action failed.");
+        }
+    };
+
+    return (
+        <div className="max-w-6xl mx-auto">
+            <h2 className="text-2xl font-bold mb-6 text-gray-800">Pending Program Applications</h2>
+            {requests.length === 0 ? (
+                <p className="text-gray-500 italic">No pending applications.</p>
+            ) : (
+                <div className="bg-white border rounded shadow overflow-hidden">
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-100 border-b">
+                            <tr>
+                                <th className="p-4 font-semibold text-gray-600">Student</th>
+                                <th className="p-4 font-semibold text-gray-600">Program Type</th>
+                                <th className="p-4 font-semibold text-gray-600">Department</th>
+                                <th className="p-4 font-semibold text-gray-600">Applied Date</th>
+                                <th className="p-4 font-semibold text-gray-600 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                            {requests.map(r => (
+                                <tr key={r.program_id} className="hover:bg-gray-50">
+                                    <td className="p-4">
+                                        <div className="font-bold text-gray-800">{r.student?.full_name}</div>
+                                        <div className="text-xs text-gray-500">{r.student?.email}</div>
+                                    </td>
+                                    <td className="p-4">
+                                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded border border-blue-200">
+                                            {r.program_type}
+                                        </span>
+                                    </td>
+                                    <td className="p-4 text-gray-600">{r.student?.department || "N/A"}</td>
+                                    <td className="p-4 text-gray-600">{new Date(r.applied_at).toLocaleDateString()}</td>
+                                    <td className="p-4 text-right flex justify-end gap-2">
+                                        <button 
+                                            onClick={() => handleAction(r.program_id, "APPROVE")}
+                                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-bold transition"
+                                        >
+                                            Approve
+                                        </button>
+                                        <button 
+                                            onClick={() => handleAction(r.program_id, "REJECT")}
+                                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-bold transition"
+                                        >
+                                            Reject
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
 }
 
 /* =========================================================

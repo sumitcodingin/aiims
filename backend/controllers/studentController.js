@@ -1,5 +1,6 @@
+/* file: backend/controllers/studentController.js */
 const supabase = require('../supabaseClient');
-const { sendStatusEmail } = require('../utils/mailer'); // CHANGED: Points to centralized mailer
+const { sendStatusEmail } = require('../utils/mailer');
 
 /* ===================================================
    Helper: Update Course Enrolled Count
@@ -23,26 +24,78 @@ const updateCourseEnrolledCount = async (course_id) => {
   }
 };
 
+/* ===================================================
+   Helper: Check Credit Limit (Max 24)
+=================================================== */
+const checkCreditLimit = async (student_id, new_course_credits, session) => {
+    const { data: enrollments, error } = await supabase
+        .from('enrollments')
+        .select(`
+            status,
+            courses!inner ( acad_session, credits )
+        `)
+        .eq('student_id', student_id)
+        .in('status', ['ENROLLED', 'PENDING_INSTRUCTOR_APPROVAL', 'PENDING_ADVISOR_APPROVAL']);
+
+    if (error) throw error;
+
+    let totalCredits = 0;
+    (enrollments || []).forEach(e => {
+        if (e.courses.acad_session === session) {
+            totalCredits += (e.courses.credits || 0);
+        }
+    });
+
+    return (totalCredits + new_course_credits) <= 24;
+};
+
+/* ===================================================
+   Helper: Grade Point Mapping
+=================================================== */
+const GRADE_POINTS = {
+  'A': 10, 'A-': 9, 'B': 8, 'B-': 7, 'C': 6, 'C-': 5, 'D': 4,
+  'E': 2, 'F': 0, 'NP': null, 'NF': null, 'I': null, 'W': null, 'S': null, 'U': null
+};
+
+const calculateSGPA = (records) => {
+  let totalPoints = 0;
+  let totalCredits = 0;
+  
+  records.forEach(record => {
+    if (record.courses && record.grade && GRADE_POINTS[record.grade] !== null) {
+      const gradePoint = GRADE_POINTS[record.grade];
+      const credits = record.courses.credits || 0;
+      totalPoints += credits * gradePoint;
+      totalCredits += credits;
+    }
+  });
+  
+  return totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '0.00';
+};
+
 // ===================================
 // 1. Apply for a course
 // ===================================
 exports.applyForCourse = async (req, res) => {
   const { student_id, course_id } = req.body;
   try {
-    // 1. Fetch details of the course to be applied for (including SLOT and SESSION)
     const { data: course, error: courseError } = await supabase
       .from('courses')
-      .select('title, slot, acad_session')
+      .select('title, slot, acad_session, credits')
       .eq('course_id', course_id)
       .single();
 
-    if (courseError || !course) {
-        return res.status(404).json({ error: "Course not found." });
+    if (courseError || !course) return res.status(404).json({ error: "Course not found." });
+
+    if (course.credits > 0) {
+        const canEnroll = await checkCreditLimit(student_id, course.credits, course.acad_session);
+        if (!canEnroll) {
+            return res.status(400).json({ error: "Credit limit exceeded. You cannot enroll in more than 24 credits per semester." });
+        }
     }
 
     const { data: student } = await supabase.from('users').select('full_name, email').eq('user_id', student_id).single();
 
-    // 2. Check existing application for THIS course
     const { data: existing } = await supabase
         .from('enrollments')
         .select('enrollment_id, status')
@@ -52,22 +105,17 @@ exports.applyForCourse = async (req, res) => {
 
     if (existing) {
       if (['DROPPED_BY_STUDENT', 'INSTRUCTOR_REJECTED', 'ADVISOR_REJECTED'].includes(existing.status)) {
-        // Re-applying is fine
+        // Allow re-apply
       } else {
         return res.status(400).json({ error: 'Active application exists.' });
       }
     }
 
-    // 3. Check for Slot Collision with other ENROLLED courses
     const { data: enrolledCourses, error: enrolledError } = await supabase
         .from('enrollments')
         .select(`
             status,
-            courses!inner (
-                course_id,
-                slot,
-                acad_session
-            )
+            courses!inner ( course_id, slot, acad_session )
         `)
         .eq('student_id', student_id)
         .eq('status', 'ENROLLED');
@@ -79,14 +127,13 @@ exports.applyForCourse = async (req, res) => {
             if (record.courses.acad_session === course.acad_session) {
                 if (record.courses.slot === course.slot) {
                     return res.status(400).json({ 
-                        error: `You have already enrolled course which is on slot ${course.slot}. Please drop that course before applying` 
+                        error: `Slot collision with course on slot ${course.slot}. Please drop that course first.` 
                     });
                 }
             }
         }
     }
 
-    // 4. Proceed with Insert / Update
     if (existing && ['DROPPED_BY_STUDENT', 'INSTRUCTOR_REJECTED', 'ADVISOR_REJECTED'].includes(existing.status)) {
         await supabase.from('enrollments').update({ status: 'PENDING_INSTRUCTOR_APPROVAL', grade: null }).eq('enrollment_id', existing.enrollment_id);
         if (student && course) await sendStatusEmail(student.email, student.full_name, course.title, 'PENDING_INSTRUCTOR_APPROVAL');
@@ -113,9 +160,7 @@ exports.dropCourse = async (req, res) => {
     const { data: enrollment, error } = await supabase
       .from('enrollments')
       .select(`
-        grade,
-        status,
-        course_id,
+        grade, status, course_id,
         course:courses(title),
         student:users(email, full_name)
       `)
@@ -125,25 +170,14 @@ exports.dropCourse = async (req, res) => {
     if (error || !enrollment) return res.status(404).json({ error: 'Enrollment not found.' });
     if (enrollment.grade !== null) return res.status(403).json({ error: 'Cannot drop graded course.' });
 
-    // 1. Update Status
-    await supabase
-      .from('enrollments')
-      .update({ status: 'DROPPED_BY_STUDENT' })
-      .eq('enrollment_id', enrollmentId);
+    await supabase.from('enrollments').update({ status: 'DROPPED_BY_STUDENT' }).eq('enrollment_id', enrollmentId);
 
-    // 2. Update Count
     if (enrollment.status === 'ENROLLED') {
       await updateCourseEnrolledCount(enrollment.course_id);
     }
 
-    // 3. Email
     if (enrollment.student && enrollment.course) {
-      await sendStatusEmail(
-        enrollment.student.email, 
-        enrollment.student.full_name, 
-        enrollment.course.title, 
-        'DROPPED_BY_STUDENT'
-      );
+      await sendStatusEmail(enrollment.student.email, enrollment.student.full_name, enrollment.course.title, 'DROPPED_BY_STUDENT');
     }
 
     res.json({ message: 'Course dropped successfully.' });
@@ -154,71 +188,37 @@ exports.dropCourse = async (req, res) => {
 };
 
 // ===================================
-// Helper: Grade Point Mapping
+// 3. Get Student Records & Credits
 // ===================================
-const GRADE_POINTS = {
-  'A': 10, 'A-': 9, 'B': 8, 'B-': 7, 'C': 6, 'C-': 5, 'D': 4,
-  'E': 2, 'F': 0, 'NP': null, 'NF': null, 'I': null, 'W': null, 'S': null, 'U': null
-};
-
-const calculateSGPA = (records) => {
-  let totalPoints = 0;
-  let totalCredits = 0;
-  
-  records.forEach(record => {
-    if (record.courses && record.grade && GRADE_POINTS[record.grade] !== null) {
-      const gradePoint = GRADE_POINTS[record.grade];
-      const credits = record.courses.credits || 0;
-      totalPoints += credits * gradePoint;
-      totalCredits += credits;
-    }
-  });
-  
-  return totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '0.00';
-};
-
-// ===================================
-// 3. Get student records
-// ===================================
-
 exports.getStudentRecords = async (req, res) => {
   const { student_id, session } = req.query;
 
   try {
-    // ✅ ensure correct type
     const sid = parseInt(student_id, 10);
-    if (isNaN(sid)) {
-      return res.status(400).json({ error: "Invalid student_id" });
-    }
+    if (isNaN(sid)) return res.status(400).json({ error: "Invalid student_id" });
 
     const { data, error } = await supabase
       .from('enrollments')
       .select(`
-        enrollment_id,
-        status,
-        grade,
-        course_id,
-        courses (
-          course_id,
-          course_code,
-          title,
-          acad_session,
-          credits,
-          slot
-        )
+        enrollment_id, status, grade, course_id,
+        courses ( course_id, course_code, title, acad_session, credits, slot )
       `)
       .eq('student_id', sid)
       .order('enrollment_id', { ascending: false });
 
     if (error) throw error;
 
-    // ✅ FILTER BY SESSION IN JS (Supabase-safe)
-    const filtered = (data || []).filter(
-      r => r.courses && r.courses.acad_session === session
-    );
+    const filtered = (data || []).filter(r => r.courses && r.courses.acad_session === session);
 
-    const sgpa = calculateSGPA(filtered);
-    res.json({ records: filtered, sgpa });
+    let creditsUsed = 0;
+    filtered.forEach(r => {
+        if (['ENROLLED', 'PENDING_INSTRUCTOR_APPROVAL', 'PENDING_ADVISOR_APPROVAL'].includes(r.status)) {
+            creditsUsed += (r.courses.credits || 0);
+        }
+    });
+
+    const sgpa = calculateSGPA(filtered); 
+    res.json({ records: filtered, sgpa, creditsUsed }); 
 
   } catch (err) {
     console.error("GET STUDENT RECORDS ERROR:", err);
@@ -226,9 +226,62 @@ exports.getStudentRecords = async (req, res) => {
   }
 };
 
+// ===================================
+// 4. NEW: Apply for Program (One-Active Rule)
+// ===================================
+exports.applyForProgram = async (req, res) => {
+    const { student_id, program_type } = req.body;
+    try {
+        // 1. Check if student has ANY pending or approved program
+        const { data: activePrograms, error: fetchError } = await supabase
+            .from('student_programs')
+            .select('program_type, status')
+            .eq('student_id', student_id)
+            .in('status', ['PENDING', 'APPROVED']);
+
+        if (fetchError) throw fetchError;
+
+        if (activePrograms && activePrograms.length > 0) {
+            const current = activePrograms[0];
+            return res.status(400).json({ 
+                error: `You already have an active application: ${current.program_type} (${current.status}). Please drop it before applying for another.` 
+            });
+        }
+
+        // 2. Insert new application
+        const { error } = await supabase
+            .from('student_programs')
+            .insert([{ student_id, program_type, status: 'PENDING' }]);
+
+        if (error) throw error;
+        res.status(201).json({ message: "Application submitted successfully." });
+    } catch (err) {
+        console.error("PROGRAM APPLY ERROR:", err);
+        res.status(500).json({ error: err.message || "Failed to submit application." });
+    }
+};
 
 // ===================================
-// 4. Get all student records (for CGPA)
+// 5. NEW: Get My Programs
+// ===================================
+exports.getStudentPrograms = async (req, res) => {
+    const { student_id } = req.query;
+    try {
+        const { data, error } = await supabase
+            .from('student_programs')
+            .select('*')
+            .eq('student_id', student_id)
+            .order('applied_at', { ascending: false });
+
+        if (error) throw error;
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: "Fetch failed." });
+    }
+};
+
+// ===================================
+// 6. Get all student records (CGPA)
 // ===================================
 exports.getAllStudentRecords = async (req, res) => {
   const { student_id } = req.query;
@@ -292,7 +345,7 @@ exports.getAllStudentRecords = async (req, res) => {
 };
 
 // ===================================
-// 5. Get Student Profile
+// 7. Get Student Profile
 // ===================================
 exports.getStudentProfile = async (req, res) => {
   const { student_id } = req.query;
@@ -310,55 +363,30 @@ exports.getStudentProfile = async (req, res) => {
 };
 
 // ===================================
-// 5. Feedback Options
+// 8. Feedback Options
 // ===================================
 exports.getFeedbackOptions = async (req, res) => {
     const { student_id } = req.query;
     if (!student_id) return res.status(400).json({ error: "student_id required" });
     try {
-        const currentSession = "2025-II"; // Current academic session
-        const { data, error } = await supabase
-            .from("enrollments")
-            .select(`course_id, courses:courses(course_id, course_code, title, acad_session, faculty_id, instructor:users!courses_faculty_id_fkey(user_id, full_name))`)
-            .eq("student_id", student_id)
-            .eq("status", "ENROLLED");
-        
+        const currentSession = "2025-II"; 
+        const { data, error } = await supabase.from("enrollments").select(`course_id, courses:courses(course_id, course_code, title, acad_session, faculty_id, instructor:users!courses_faculty_id_fkey(user_id, full_name))`).eq("student_id", student_id).eq("status", "ENROLLED");
         if(error) throw error;
-        
-        const options = (data||[])
-            .filter(row => row.courses && row.courses.acad_session === currentSession) // Filter by current session
-            .map(row => {
-                const c = row.courses;
-                return { 
-                    course_id: c.course_id, 
-                    course_code: c.course_code, 
-                    title: c.title, 
-                    acad_session: c.acad_session, 
-                    instructor_id: c.faculty_id, 
-                    instructor_name: c.instructor?.full_name || "—" 
-                };
-            })
-            .filter(Boolean);
-        
+        const options = (data||[]).filter(row => row.courses && row.courses.acad_session === currentSession).map(row => { const c = row.courses; return { course_id: c.course_id, course_code: c.course_code, title: c.title, acad_session: c.acad_session, instructor_id: c.faculty_id, instructor_name: c.instructor?.full_name || "—" }; }).filter(Boolean);
         res.json(options);
-    } catch(err) { 
-        console.error("getFeedbackOptions error:", err);
-        res.status(500).json({ error: "Failed." }); 
-    }
+    } catch(err) { res.status(500).json({ error: "Failed." }); }
 };
 
 // ===================================
-// 6. Submit Feedback
+// 9. Submit Feedback
 // ===================================
 exports.submitInstructorFeedback = async (req, res) => {
     const { student_id, course_id, instructor_id, feedback_type, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11 } = req.body;
     try {
         const { data: enr } = await supabase.from("enrollments").select("status, course:courses(faculty_id)").eq("student_id", student_id).eq("course_id", course_id).maybeSingle();
         if(!enr || enr.status !== "ENROLLED" || String(enr.course.faculty_id) !== String(instructor_id)) return res.status(403).json({ error: "Invalid." });
-        
         const { data: ext } = await supabase.from("course_instructor_feedback").select("feedback_id").eq("student_id", student_id).eq("course_id", course_id).eq("instructor_id", instructor_id).eq("feedback_type", feedback_type).maybeSingle();
         if(ext) return res.status(400).json({ error: "Already submitted." });
-
         await supabase.from("course_instructor_feedback").insert([{ student_id, course_id, instructor_id, feedback_type, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11 }]);
         res.status(201).json({ message: "Submitted." });
     } catch(err) { res.status(500).json({ error: "Failed." }); }

@@ -1,3 +1,4 @@
+/* file: frontend/src/pages/student/Courses.jsx */
 import { useEffect, useState, useCallback } from "react";
 import api from "../../services/api";
 
@@ -13,25 +14,18 @@ export default function Courses() {
     instructor: ""
   });
   
-  // Modal State for Course Details
   const [selectedCourse, setSelectedCourse] = useState(null);
-
-  // 🚀 MODAL STATE: Enrollment List & Metadata
   const [enrollmentList, setEnrollmentList] = useState([]);
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
-  
-  // 🚀 STATE: Stores Title, Enrolled Count (from list), and Capacity (from course)
-  const [viewingEnrollmentMeta, setViewingEnrollmentMeta] = useState({
-    title: "",
-    enrolledCount: 0,
-    capacity: 0
-  });
+  const [viewingEnrollmentMeta, setViewingEnrollmentMeta] = useState({ title: "", enrolledCount: 0, capacity: 0 });
 
-  // CHANGED: sessionStorage -> localStorage
+  // NEW: State for credits
+  const [creditsUsed, setCreditsUsed] = useState(0);
+  const CREDIT_LIMIT = 24;
+
   const user = JSON.parse(localStorage.getItem("user"));
   const CURRENT_SESSION = "2025-II";
 
-  // Fetch unique departments from all courses
   const fetchDepartments = useCallback(async () => {
     try {
       const coursesRes = await api.get("/courses/search", { params: { session: CURRENT_SESSION } });
@@ -43,7 +37,6 @@ export default function Courses() {
     }
   }, []);
 
-  // Fetch approved courses
   const fetchData = useCallback(async () => {
     if (!user || !user.id) return;
 
@@ -57,6 +50,11 @@ export default function Courses() {
 
       const mapping = {};
       const recordsData = recordsRes.data.records || recordsRes.data;
+      
+      // Update Credits Used
+      if (recordsRes.data.creditsUsed !== undefined) {
+          setCreditsUsed(recordsRes.data.creditsUsed);
+      }
 
       (Array.isArray(recordsData) ? recordsData : []).forEach(r => {
         if (r?.courses?.course_id) {
@@ -89,13 +87,12 @@ export default function Courses() {
       fetchData(); 
       setSelectedCourse(null);
     } catch (err) {
-      alert(err.response?.data?.message || "You already have an active request for this course.");
+      alert(err.response?.data?.error || "Application failed.");
     }
   };
 
   const drop = async (enrollmentId) => {
     if (!window.confirm("Are you sure you want to drop this course?")) return;
-
     try {
       await api.post("/student/drop", { enrollmentId });
       alert("Course dropped successfully.");
@@ -128,11 +125,11 @@ export default function Courses() {
 
   const statusText = (status) => {
     switch (status) {
-      case "PENDING_INSTRUCTOR_APPROVAL": return "Pending Instructor Approval";
-      case "PENDING_ADVISOR_APPROVAL": return "Pending Advisor Approval";
+      case "PENDING_INSTRUCTOR_APPROVAL": return "Pending Instructor";
+      case "PENDING_ADVISOR_APPROVAL": return "Pending Advisor";
       case "ENROLLED": return "Enrolled";
-      case "INSTRUCTOR_REJECTED": return "Rejected by Instructor";
-      case "ADVISOR_REJECTED": return "Rejected by Advisor";
+      case "INSTRUCTOR_REJECTED": return "Rejected (Inst)";
+      case "ADVISOR_REJECTED": return "Rejected (Adv)";
       case "DROPPED_BY_STUDENT": return "Dropped";
       default: return "";
     }
@@ -149,21 +146,17 @@ export default function Courses() {
     }
   };
 
-  const getListStatusColor = (status) => {
-    if (status === 'ENROLLED') return 'text-green-600 bg-green-50 border-green-200';
-    if (status.includes('PENDING')) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-    return 'text-gray-600 bg-gray-50';
-  };
-
   const getCourseActions = (course) => {
     const enrollment = appliedMap[course.course_id];
     const status = enrollment?.status;
     
-    // CHANGE 3: Logic updated to disable enrollment if course was dropped
+    // Check if adding this course exceeds limit
+    const potentialCredits = creditsUsed + (course.credits || 0);
+    const limitReached = potentialCredits > CREDIT_LIMIT;
+
     const canApply =
-      !enrollment ||
-      status === "INSTRUCTOR_REJECTED" ||
-      status === "ADVISOR_REJECTED";
+      (!enrollment || status === "INSTRUCTOR_REJECTED" || status === "ADVISOR_REJECTED") &&
+      !limitReached;
 
     const canDrop = enrollment && 
                     status !== "DROPPED_BY_STUDENT" && 
@@ -171,16 +164,25 @@ export default function Courses() {
                     status !== "ADVISOR_REJECTED" &&
                     enrollment.grade === null;
 
-    return { enrollment, status, canApply, canDrop };
+    return { enrollment, status, canApply, canDrop, limitReached };
   };
 
   if (!user) return <p>Loading session...</p>;
 
   return (
     <>
-      <h2 className="text-2xl font-bold mb-4">Available Courses</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold">Available Courses</h2>
+        <div className="bg-blue-50 border border-blue-200 px-4 py-2 rounded text-sm">
+            <span className="font-bold text-gray-700">Credits Used: </span>
+            <span className={`font-bold ${creditsUsed > 24 ? 'text-red-600' : 'text-blue-600'}`}>
+                {creditsUsed}
+            </span>
+            <span className="text-gray-500"> / {CREDIT_LIMIT}</span>
+        </div>
+      </div>
 
-      {/* SEARCH BAR - Using rounded-none for sharp edges */}
+      {/* SEARCH BAR */}
       <div className="bg-white p-4 rounded-none shadow border mb-6 grid grid-cols-2 md:grid-cols-5 gap-3">
         <input name="code" placeholder="Course Code" className="border p-2 rounded-none text-sm" value={search.code} onChange={handleChange} />
         <input name="title" placeholder="Course Title" className="border p-2 rounded-none text-sm" value={search.title} onChange={handleChange} />
@@ -203,20 +205,18 @@ export default function Courses() {
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {courses.map((c) => {
-            const { canApply, canDrop, enrollment, status } = getCourseActions(c);
+            const { canApply, canDrop, enrollment, status, limitReached } = getCourseActions(c);
 
             return (
               <div 
                 key={c.course_id} 
                 onClick={() => setSelectedCourse(c)}
-                // CHANGE 1: Added rounded-none for sharp edges
                 className="bg-white p-4 shadow rounded-none border hover:shadow-lg transition cursor-pointer relative"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    {/* CHANGE 2: Heading set to black */}
                     <h3 className="font-bold text-lg text-black">{c.title}</h3>
-                    <p className="text-sm text-gray-500">{c.course_code}</p>
+                    <p className="text-sm text-gray-500">{c.course_code} • {c.credits} Credits</p>
                     <p className="text-sm text-gray-700">Instructor: {c.instructor?.full_name || "—"}</p>
                   </div>
                   {enrollment && (
@@ -231,15 +231,22 @@ export default function Courses() {
                     onClick={(e) => handleShowEnrollments(e, c)}
                     className="bg-white hover:bg-gray-100 text-gray-700 px-3 py-1 rounded-none text-sm transition border border-gray-300"
                   >
-                    Show Enrollments
+                    View
                   </button>
 
-                  {/* CHANGE 4: Button styles - Transparent/White with colored borders and hover fill */}
-                  {canApply && (
-                    <button onClick={(e) => { e.stopPropagation(); apply(c.course_id); }}
-                      className="bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-4 py-1 rounded-none text-sm transition-all font-semibold">
-                      Enroll
-                    </button>
+                  {/* Enroll Button with Limit Logic */}
+                  {!enrollment && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); if(canApply) apply(c.course_id); }}
+                        disabled={!canApply}
+                        className={`px-4 py-1 rounded-none text-sm transition-all font-semibold border ${
+                            canApply 
+                            ? "bg-white border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white" 
+                            : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
+                        }`}
+                      >
+                        {limitReached ? "Limit Reached" : "Enroll"}
+                      </button>
                   )}
 
                   {canDrop && (
@@ -255,138 +262,62 @@ export default function Courses() {
         </div>
       )}
 
-      {/* 1. COURSE DETAILS MODAL */}
+      {/* MODAL */}
       {selectedCourse && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-none shadow-xl max-w-lg w-full p-6 relative">
-            <button 
-              onClick={() => setSelectedCourse(null)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-black text-xl font-bold"
-            >
-              &times;
-            </button>
-
-            {/* CHANGE 2: Heading set to black */}
+            <button onClick={() => setSelectedCourse(null)} className="absolute top-4 right-4 text-gray-500 hover:text-black text-xl font-bold">&times;</button>
             <h2 className="text-2xl font-bold mb-1 text-black">{selectedCourse.title}</h2>
-            <p className="text-gray-500 mb-4">{selectedCourse.course_code}</p>
-
-            <div className="space-y-3 mb-6">
-              <div className="flex justify-between border-b pb-2">
-                <span className="font-semibold text-gray-700">Department:</span>
-                <span>{selectedCourse.department}</span>
-              </div>
-              <div className="flex justify-between border-b pb-2">
-                <span className="font-semibold text-gray-700">Instructor:</span>
-                <span>{selectedCourse.instructor?.full_name || "N/A"}</span>
-              </div>
-              <div className="flex justify-between border-b pb-2">
-                <span className="font-semibold text-gray-700">Session:</span>
-                <span>{selectedCourse.acad_session}</span>
-              </div>
-              <div className="flex justify-between border-b pb-2">
-                <span className="font-semibold text-gray-700">Seats:</span>
-                <span>{selectedCourse.enrolled_count} / {selectedCourse.capacity}</span>
-              </div>
-              
-              <div className="mt-4 p-3 bg-gray-50 rounded-none border">
-                <h4 className="font-bold text-gray-800 mb-2">My Enrollment Status</h4>
-                {appliedMap[selectedCourse.course_id] ? (
-                   <div className="flex items-center gap-2">
-                      <span className={`px-3 py-1 text-sm font-bold rounded-none ${statusColor(appliedMap[selectedCourse.course_id].status)}`}>
-                        {statusText(appliedMap[selectedCourse.course_id].status)}
-                      </span>
-                   </div>
-                ) : (
-                  <span className="text-gray-500 text-sm">You are not enrolled in this course.</span>
-                )}
-              </div>
+            <div className="space-y-3 mb-6 mt-4">
+               <div className="flex justify-between border-b pb-2"><span className="font-bold">Credits:</span><span>{selectedCourse.credits}</span></div>
+               <div className="flex justify-between border-b pb-2"><span className="font-bold">Instructor:</span><span>{selectedCourse.instructor?.full_name}</span></div>
+               <div className="flex justify-between border-b pb-2"><span className="font-bold">Slot:</span><span>{selectedCourse.slot || "N/A"}</span></div>
             </div>
-
+            
             <div className="flex gap-3 justify-end mt-4">
-              {(() => {
-                const { canApply, canDrop, enrollment } = getCourseActions(selectedCourse);
-                return (
-                  <>
-                    {/* CHANGE 4: Modal Button Styles */}
-                    {canApply && (
-                      <button 
-                        onClick={() => apply(selectedCourse.course_id)}
-                        className="bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-6 py-2 rounded-none transition-all font-semibold"
-                      >
-                        Enroll Now
-                      </button>
-                    )}
-                    {canDrop && (
-                      <button 
-                        onClick={() => drop(enrollment.enrollment_id)}
-                        className="bg-white border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white px-6 py-2 rounded-none transition-all font-semibold"
-                      >
-                        Drop Course
-                      </button>
-                    )}
-                    {!canApply && !canDrop && (
-                        <button 
-                            onClick={() => setSelectedCourse(null)}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-none transition"
-                        >
-                            Close
-                        </button>
-                    )}
-                  </>
-                );
-              })()}
+                {(() => {
+                    const { canApply, canDrop, limitReached, enrollment } = getCourseActions(selectedCourse);
+                    return (
+                        <>
+                            {!enrollment && (
+                                <button 
+                                    onClick={() => apply(selectedCourse.course_id)}
+                                    disabled={!canApply}
+                                    className={`px-6 py-2 rounded-none transition-all font-semibold border-2 ${
+                                        canApply 
+                                        ? "bg-white border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white" 
+                                        : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
+                                    }`}
+                                >
+                                    {limitReached ? "Credit Limit Reached" : "Enroll Now"}
+                                </button>
+                            )}
+                            {canDrop && (
+                                <button onClick={() => drop(enrollment.enrollment_id)} className="bg-white border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white px-6 py-2 rounded-none transition-all font-semibold">Drop Course</button>
+                            )}
+                        </>
+                    )
+                })()}
             </div>
           </div>
         </div>
       )}
-
-      {/* 2. ENROLLMENT LIST MODAL */}
+      
+      {/* Enrollment List Modal */}
       {showEnrollmentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
-          <div className="bg-white rounded-none shadow-xl max-w-md w-full p-6 relative max-h-[80vh] flex flex-col">
-            <button 
-              onClick={() => setShowEnrollmentModal(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-black text-xl font-bold"
-            >
-              &times;
-            </button>
-
-            <h3 className="text-xl font-bold mb-1">Current Enrollments</h3>
-            <p className="text-sm text-gray-500">{viewingEnrollmentMeta.title}</p>
-            
-            <p className="text-sm font-semibold text-blue-600 mt-1 mb-4">
-              Current Enrolled: {viewingEnrollmentMeta.enrolledCount}/{viewingEnrollmentMeta.capacity}
-            </p>
-
-            <div className="overflow-y-auto flex-1">
-              {enrollmentList.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">No students have applied yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {enrollmentList.map((record, idx) => (
-                    <li key={idx} className="flex justify-between items-center p-3 border rounded-none bg-gray-50">
-                      <div>
-                        <p className="font-semibold text-gray-800">{record.student?.full_name || "Unknown"}</p>
-                        <p className="text-xs text-gray-500">{record.student?.department || "No Dept"}</p>
-                      </div>
-                      <span className={`text-[10px] px-2 py-1 rounded-none border font-bold uppercase ${getListStatusColor(record.status)}`}>
-                        {record.status.replace(/_/g, ' ')}
-                      </span>
-                    </li>
-                  ))}
+            <div className="bg-white rounded-none p-6 relative max-w-md w-full">
+                <button onClick={() => setShowEnrollmentModal(false)} className="absolute top-4 right-4">&times;</button>
+                <h3 className="font-bold">Current Enrollments</h3>
+                <ul className="mt-4 space-y-2">
+                    {enrollmentList.map((r, i) => (
+                        <li key={i} className="flex justify-between text-sm bg-gray-50 p-2 border">
+                            <span>{r.student?.full_name}</span>
+                            <span className="text-xs font-bold text-gray-500">{r.status}</span>
+                        </li>
+                    ))}
                 </ul>
-              )}
             </div>
-            
-            <div className="mt-4 text-right">
-              <button 
-                onClick={() => setShowEnrollmentModal(false)}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-none text-sm"
-              >
-                Close
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </>

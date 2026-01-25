@@ -303,7 +303,7 @@ exports.toggleGradeSubmission = async (req, res) => {
 };
 
 // ============================
-// 8. NEW: Get Pending Courses for Admin
+// 8. Get Pending Courses for Admin
 // ============================
 exports.getPendingCourses = async (req, res) => {
   try {
@@ -325,7 +325,7 @@ exports.getPendingCourses = async (req, res) => {
 };
 
 // ============================
-// 9. NEW: Admin Approve/Reject Course
+// 9. Admin Approve/Reject Course
 // ============================
 exports.approveCourse = async (req, res) => {
   const { courseId, action } = req.body;
@@ -348,4 +348,47 @@ exports.approveCourse = async (req, res) => {
     console.error("ADMIN APPROVE COURSE ERROR:", err);
     res.status(500).json({ error: "Failed to update course status." });
   }
+};
+
+// ===========================================
+// 10. NEW: Program Application Management
+// ===========================================
+
+// Get pending program requests
+exports.getProgramRequests = async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('student_programs')
+            .select(`
+                program_id, program_type, status, applied_at,
+                student:users!student_id ( full_name, email, department )
+            `)
+            .eq('status', 'PENDING');
+        
+        if (error) throw error;
+        res.json(data);
+    } catch (err) {
+        console.error("GET PROGRAM REQUESTS ERROR:", err);
+        res.status(500).json({ error: "Fetch failed." });
+    }
+};
+
+// Approve/Reject Program
+exports.updateProgramStatus = async (req, res) => {
+    const { programId, action } = req.body; // action: 'APPROVE' | 'REJECT'
+    try {
+        const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+        
+        const { error } = await supabase
+            .from('student_programs')
+            .update({ status: newStatus })
+            .eq('program_id', programId);
+
+        if (error) throw error;
+
+        res.json({ message: `Application ${action}D.` });
+    } catch (err) {
+        console.error("UPDATE PROGRAM ERROR:", err);
+        res.status(500).json({ error: "Update failed." });
+    }
 };

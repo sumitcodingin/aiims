@@ -1,3 +1,4 @@
+/* file: frontend/src/pages/StudentDashboard.jsx */
 import { useState } from "react";
 
 import Courses from "./student/Courses";
@@ -6,16 +7,15 @@ import StudentRecords from "./student/StudentRecords";
 import StudentTimetable from "./student/StudentTimetable";
 import CourseInstructorFeedback from "./student/CourseInstructorFeedback";
 import AcademicEvents from "./student/AcademicEvents";
-import StudentProjects from "./student/StudentProjects"; 
+import StudentProjects from "./student/StudentProjects";
+import StudentPrograms from "./student/StudentPrograms"; // NEW IMPORT
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("courses");
   
-  // CHANGED: sessionStorage -> localStorage
   const user = JSON.parse(localStorage.getItem("user"));
 
   const logout = () => {
-    // CHANGED: sessionStorage -> localStorage
     localStorage.removeItem("user");
     window.location.href = "/";
   };
@@ -33,41 +33,17 @@ export default function StudentDashboard() {
 
           {/* NAV ITEMS */}
           <div className="flex flex-col mt-4">
-            <NavButton
-              label="Courses"
-              active={activeTab === "courses"}
-              onClick={() => setActiveTab("courses")}
-            />
-            <NavButton
-              label="Projects"
-              active={activeTab === "projects"}
-              onClick={() => setActiveTab("projects")}
-            />
-            <NavButton
-              label="Profile"
-              active={activeTab === "profile"}
-              onClick={() => setActiveTab("profile")}
-            />
-            <NavButton
-              label="Records"
-              active={activeTab === "records"}
-              onClick={() => setActiveTab("records")}
-            />
-            <NavButton
-              label="Timetable"
-              active={activeTab === "timetable"}
-              onClick={() => setActiveTab("timetable")}
-            />
-            <NavButton
-              label="Feedback"
-              active={activeTab === "feedback"}
-              onClick={() => setActiveTab("feedback")}
-            />
-            <NavButton
-              label="Academic Events"
-              active={activeTab === "academic-events"}
-              onClick={() => setActiveTab("academic-events")}
-            />
+            <NavButton label="Courses" active={activeTab === "courses"} onClick={() => setActiveTab("courses")} />
+            
+            {/* NEW BUTTON */}
+            <NavButton label="Degree Programs" active={activeTab === "programs"} onClick={() => setActiveTab("programs")} />
+            
+            <NavButton label="Projects" active={activeTab === "projects"} onClick={() => setActiveTab("projects")} />
+            <NavButton label="Records" active={activeTab === "records"} onClick={() => setActiveTab("records")} />
+            <NavButton label="Timetable" active={activeTab === "timetable"} onClick={() => setActiveTab("timetable")} />
+            <NavButton label="Feedback" active={activeTab === "feedback"} onClick={() => setActiveTab("feedback")} />
+            <NavButton label="Academic Events" active={activeTab === "academic-events"} onClick={() => setActiveTab("academic-events")} />
+            <NavButton label="Profile" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
           </div>
         </div>
 
@@ -89,11 +65,10 @@ export default function StudentDashboard() {
       {/* ================= MAIN CONTENT ================= */}
       <main className="ml-64 p-6 min-h-screen overflow-y-auto">
         {activeTab === "courses" && <Courses />}
+        {activeTab === "programs" && <StudentPrograms />} {/* NEW COMPONENT */}
         {activeTab === "projects" && <StudentProjects />} 
-        
         {activeTab === "records" && <StudentRecords />}
         {activeTab === "timetable" && <StudentTimetable />}
-        
         {activeTab === "academic-events" && <AcademicEvents />}
         {activeTab === "feedback" && <CourseInstructorFeedback />}
         {activeTab === "profile" && <StudentProfile />}
