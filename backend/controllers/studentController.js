@@ -411,22 +411,64 @@ exports.getFeedbackOptions = async (req, res) => {
     const { student_id } = req.query;
     if (!student_id) return res.status(400).json({ error: "student_id required" });
     try {
-        const currentSession = "2025-II"; 
-        const { data, error } = await supabase.from("enrollments").select(`course_id, courses:courses(course_id, course_code, title, acad_session, faculty_id, instructor:users!courses_faculty_id_fkey(user_id, full_name))`).eq("student_id", student_id).eq("status", "ENROLLED");
+        const currentSession = "2025-II"; // Current academic session
+        const { data, error } = await supabase
+            .from("enrollments")
+            .select(`course_id, courses:courses(course_id, course_code, title, acad_session, coordinator_id, co_instructors)`)
+            .eq("student_id", student_id)
+            .eq("status", "ENROLLED");
+        
         if(error) throw error;
-        const options = (data||[]).filter(row => row.courses && row.courses.acad_session === currentSession).map(row => { const c = row.courses; return { course_id: c.course_id, course_code: c.course_code, title: c.title, acad_session: c.acad_session, instructor_id: c.faculty_id, instructor_name: c.instructor?.full_name || "—" }; }).filter(Boolean);
+        
+        // Fetch all co-instructor details
+        const courseFilteredData = (data||[]).filter(row => row.courses && row.courses.acad_session === currentSession);
+        
+        let options = [];
+        for (const row of courseFilteredData) {
+            const c = row.courses;
+            const allInstructorIds = new Set(c.co_instructors || []);
+            if (c.coordinator_id) allInstructorIds.add(String(c.coordinator_id));
+            
+            // Fetch details for all instructors
+            for (const instructorId of allInstructorIds) {
+                const { data: instructor } = await supabase
+                    .from("users")
+                    .select("user_id, full_name")
+                    .eq("user_id", instructorId)
+                    .single();
+                
+                if (instructor) {
+                    options.push({
+                        course_id: c.course_id,
+                        course_code: c.course_code,
+                        title: c.title,
+                        acad_session: c.acad_session,
+                        instructor_id: String(instructorId),
+                        instructor_name: instructor.full_name
+                    });
+                }
+            }
+        }
+        
         res.json(options);
     } catch(err) { res.status(500).json({ error: "Failed." }); }
 };
 
 // ===================================
-// 9. Submit Feedback
+// 6. Submit Feedback (Allow any co-instructor to receive feedback)
 // ===================================
 exports.submitInstructorFeedback = async (req, res) => {
     const { student_id, course_id, instructor_id, feedback_type, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11 } = req.body;
     try {
-        const { data: enr } = await supabase.from("enrollments").select("status, course:courses(faculty_id)").eq("student_id", student_id).eq("course_id", course_id).maybeSingle();
-        if(!enr || enr.status !== "ENROLLED" || String(enr.course.faculty_id) !== String(instructor_id)) return res.status(403).json({ error: "Invalid." });
+        const { data: enr } = await supabase.from("enrollments").select("status, course:courses(coordinator_id, co_instructors)").eq("student_id", student_id).eq("course_id", course_id).maybeSingle();
+        if(!enr || enr.status !== "ENROLLED") return res.status(403).json({ error: "Invalid." });
+        
+        // Check if instructor_id is either coordinator or co-instructor
+        const isCoordinator = String(enr.course.coordinator_id) === String(instructor_id);
+        const isCoInstructor = enr.course.co_instructors && enr.course.co_instructors.includes(String(instructor_id));
+        
+        if(!isCoordinator && !isCoInstructor) return res.status(403).json({ error: "Invalid." });
+        
         const { data: ext } = await supabase.from("course_instructor_feedback").select("feedback_id").eq("student_id", student_id).eq("course_id", course_id).eq("instructor_id", instructor_id).eq("feedback_type", feedback_type).maybeSingle();
         if(ext) return res.status(400).json({ error: "Already submitted." });
         await supabase.from("course_instructor_feedback").insert([{ student_id, course_id, instructor_id, feedback_type, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11 }]);

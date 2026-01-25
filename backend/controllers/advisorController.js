@@ -37,7 +37,7 @@ exports.getFloatedCourses = async (req, res) => {
       .from("courses")
       .select(`
         course_id, course_code, title, acad_session, capacity, department, status, credits,
-        instructor:users!faculty_id ( full_name, email )
+        coordinator:users!coordinator_id ( full_name, email )
       `)
       .eq("advisor_id", advisor_id) 
       .in("status", ["APPROVED", "REJECTED", "PENDING_ADMIN_APPROVAL"]);
@@ -65,7 +65,7 @@ exports.getAdvisorInstructorCourses = async (req, res) => {
       .from("courses")
       .select(`
         course_id, course_code, title, department, acad_session, capacity, enrolled_count, status, credits, slot,
-        instructor:users!faculty_id ( full_name, email )
+        coordinator:users!coordinator_id ( full_name, email )
       `)
       .eq("advisor_id", advisor_id)
       .order('created_at', { ascending: false });

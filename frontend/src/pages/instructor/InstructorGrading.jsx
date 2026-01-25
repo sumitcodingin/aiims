@@ -125,7 +125,7 @@ export default function InstructorGrading() {
   const handleValidateCSV = async () => {
     if (csvData.length === 0) return;
     try {
-      const res = await api.post("/instructor/validate-grades-csv", {
+      const res = await api.post("/instructor/validate-grades", {
         course_id: massGradingCourse.course_id,
         instructor_id: user.id,
         data: csvData,

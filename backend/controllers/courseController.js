@@ -7,9 +7,9 @@ exports.searchCourses = async (req, res) => {
   const { code, dept, session, title, instructor } = req.query;
 
   try {
-    const instructorSelect = instructor 
-      ? `instructor:users!courses_faculty_id_fkey!inner(full_name, email)` 
-      : `instructor:users!courses_faculty_id_fkey(full_name, email)`;
+    const coordinatorSelect = instructor 
+      ? `coordinator:users!courses_coordinator_id_fkey!inner(full_name, email)` 
+      : `coordinator:users!courses_coordinator_id_fkey(full_name, email)`;
     let query = supabase
       .from('courses')
       .select(`
@@ -22,7 +22,7 @@ exports.searchCourses = async (req, res) => {
         enrolled_count,
         credits,
         slot,
-        ${instructorSelect}
+        ${coordinatorSelect}
       `)
       // Students see ONLY approved courses
       .eq('status', 'APPROVED');
@@ -33,7 +33,7 @@ exports.searchCourses = async (req, res) => {
     if (code) query = query.ilike('course_code', `%${code}%`);
     if (title) query = query.ilike('title', `%${title}%`);
     if (instructor) {
-      query = query.ilike('instructor.full_name', `%${instructor}%`);
+      query = query.ilike('coordinator.full_name', `%${instructor}%`);
     }
 
     const { data, error } = await query;

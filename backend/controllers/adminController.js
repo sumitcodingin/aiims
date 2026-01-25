@@ -312,7 +312,7 @@ exports.getPendingCourses = async (req, res) => {
       .from('courses')
       .select(`
         course_id, course_code, title, department, acad_session, capacity, credits,
-        instructor:users!faculty_id(full_name, email)
+        coordinator:users!coordinator_id(full_name, email)
       `)
       .eq('status', 'PENDING_ADMIN_APPROVAL');
 
