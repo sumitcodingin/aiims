@@ -1,6 +1,6 @@
+/* file: backend/controllers/advisorController.js */
 const supabase = require("../supabaseClient");
 const { sendCustomEmail } = require("../utils/sendCustomEmail");
-// CHANGED: Import from 'mailer' instead of the deleted 'sendEmail'
 const { sendStatusEmail } = require('../utils/mailer');
 
 /* ===================================================
@@ -26,10 +26,10 @@ const updateCourseEnrolledCount = async (course_id) => {
 };
 
 /* ===================================================
-   SECTION 1: COURSE APPROVALS (Instructor -> Advisor)
+   SECTION 1: COURSE LISTING (Instructor -> Advisor)
 =================================================== */
 
-// A. Get Floated Courses (Pending AND Approved)
+// A. Get Floated Courses (Approved/Rejected only)
 exports.getFloatedCourses = async (req, res) => {
   const { advisor_id } = req.query;
   try {
@@ -40,7 +40,7 @@ exports.getFloatedCourses = async (req, res) => {
         instructor:users!faculty_id ( full_name, email )
       `)
       .eq("advisor_id", advisor_id) 
-      .in("status", ["PENDING_ADVISOR_APPROVAL", "APPROVED", "REJECTED"]);
+      .in("status", ["APPROVED", "REJECTED", "PENDING_ADMIN_APPROVAL"]);
 
     if (error) throw error;
     res.json(courses || []);
@@ -50,39 +50,31 @@ exports.getFloatedCourses = async (req, res) => {
   }
 };
 
-// B. Approve / Reject Floated Course
+// B. Approve / Reject Floated Course (DEPRECATED)
 exports.approveCourse = async (req, res) => {
-  const { course_id, action, advisor_id } = req.body;
-  
+  return res.status(403).json({ error: "Advisors no longer approve courses. Contact Admin." });
+};
+
+// C. NEW: Get My Instructor Courses (Courses assigned to this advisor)
+exports.getAdvisorInstructorCourses = async (req, res) => {
+  const { advisor_id } = req.query;
+
   try {
-    const { data: course } = await supabase
+    // Fetch courses where advisor_id matches the logged-in advisor
+    const { data: courses, error } = await supabase
       .from("courses")
-      .select("advisor_id, status")
-      .eq("course_id", course_id)
-      .single();
+      .select(`
+        course_id, course_code, title, department, acad_session, capacity, enrolled_count, status, credits, slot,
+        instructor:users!faculty_id ( full_name, email )
+      `)
+      .eq("advisor_id", advisor_id)
+      .order('created_at', { ascending: false });
 
-    if (!course) return res.status(404).json({ error: "Course not found." });
-
-    if (String(course.advisor_id) !== String(advisor_id)) {
-      return res.status(403).json({ error: "Unauthorized: You are not the advisor for this instructor." });
-    }
-
-    let newStatus = "";
-    if (action === "APPROVE") newStatus = "APPROVED";
-    else if (action === "REJECT") newStatus = "REJECTED";
-    else return res.status(400).json({ error: "Invalid action." });
-
-    const { error } = await supabase
-      .from("courses")
-      .update({ status: newStatus })
-      .eq("course_id", course_id);
-    
     if (error) throw error;
-    
-    res.json({ message: `Course status updated to ${newStatus}.`, status: newStatus });
+    res.json(courses || []);
   } catch (err) {
-    console.error("COURSE APPROVAL ERROR:", err);
-    res.status(500).json({ error: "Course approval failed." });
+    console.error("GET INSTRUCTOR COURSES ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch instructor courses." });
   }
 };
 
@@ -362,9 +354,6 @@ exports.sendEmailToStudent = async (req, res) => {
 
 /* ==================================================
    SCHEDULE MEETING
-   - Generates .ics Invite
-   - Sends as Advisor
-   - Sends to ALL Students in TO field
 ================================================== */
 exports.scheduleMeeting = async (req, res) => {
     const { advisor_id, student_emails, date, start_time, end_time, topic, meet_link, description } = req.body;
@@ -374,7 +363,6 @@ exports.scheduleMeeting = async (req, res) => {
     }
   
     try {
-      // 1. Verify Advisor
       const { data: advisor, error } = await supabase
         .from("users")
         .select("full_name, email")
@@ -384,7 +372,6 @@ exports.scheduleMeeting = async (req, res) => {
   
       if (error || !advisor) return res.status(403).json({ error: "Unauthorized." });
   
-      // 2. Helper: Convert "HH:MM AM/PM" to Date Object
       const parseTime = (dateStr, timeStr) => {
         const [time, modifier] = timeStr.split(' ');
         let [hours, minutes] = time.split(':');
@@ -396,7 +383,6 @@ exports.scheduleMeeting = async (req, res) => {
       const startDateTime = parseTime(date, start_time);
       const endDateTime = end_time ? parseTime(date, end_time) : new Date(startDateTime.getTime() + 60 * 60 * 1000);
 
-      // 3. Generate .ics (Calendar Invite) Content
       const formatICSDate = (d) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
       const now = formatICSDate(new Date());
       const start = formatICSDate(startDateTime);
@@ -421,7 +407,6 @@ exports.scheduleMeeting = async (req, res) => {
         "END:VCALENDAR"
       ].join("\r\n");
 
-      // 4. Construct Email Body
       const emailBody = `
         Dear Student,
 
@@ -437,10 +422,9 @@ exports.scheduleMeeting = async (req, res) => {
         ${advisor.full_name}
       `;
   
-      // 5. Send Email with Attachment
       await sendCustomEmail({
-        to: student_emails, // UPDATED: Sends directly to students list
-        cc: [advisor.email], // UPDATED: Advisor gets a copy
+        to: student_emails,
+        cc: [advisor.email], 
         subject: `[Invitation] ${topic} @ ${start_time}`,
         text: emailBody,
         replyTo: advisor.email, 

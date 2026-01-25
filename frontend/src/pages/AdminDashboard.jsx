@@ -1,3 +1,4 @@
+/* file: frontend/src/pages/AdminDashboard.jsx */
 import { useEffect, useState, useCallback } from "react";
 import api from "../services/api";
 import { Lock, Unlock, Settings } from 'lucide-react';
@@ -69,6 +70,14 @@ export default function AdminDashboard() {
               Course Management
             </div>
 
+            {/* NEW TAB FOR APPROVALS */}
+            <NavBtn
+              active={activeTab === "COURSE_APPROVALS"}
+              onClick={() => setActiveTab("COURSE_APPROVALS")}
+            >
+              Course Approvals
+            </NavBtn>
+
             <NavBtn
               active={activeTab === "OFFERINGS"}
               onClick={() => setActiveTab("OFFERINGS")}
@@ -103,6 +112,9 @@ export default function AdminDashboard() {
           <UserList status={activeTab} />
         )}
 
+        {/* NEW: Render Course Approvals */}
+        {activeTab === "COURSE_APPROVALS" && <AdminCourseApprovals />}
+
         {/* Render Course Management */}
         {activeTab === "OFFERINGS" && <AdminCourseList />}
       </main>
@@ -111,7 +123,7 @@ export default function AdminDashboard() {
 }
 
 /* =========================================================
-   COMPONENT 0: SYSTEM CONTROLS (NEW)
+   COMPONENT 0: SYSTEM CONTROLS
    ========================================================= */
 function SystemControls() {
   const [settings, setSettings] = useState({ course_registration: true, grade_submission: true });
@@ -165,8 +177,6 @@ function SystemControls() {
         </h2>
 
         <div className="grid md:grid-cols-2 gap-6">
-            
-            {/* CARD 1: Course Registration */}
             <div className={`p-6 rounded-lg border shadow-sm transition ${settings.course_registration ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                 <div className="flex justify-between items-start mb-4">
                     <div>
@@ -178,13 +188,11 @@ function SystemControls() {
                         : <Lock className="text-red-600" size={28}/>
                     }
                 </div>
-                
                 <div className="mb-6">
                     <span className={`px-2 py-1 text-xs font-bold rounded ${settings.course_registration ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                         STATUS: {settings.course_registration ? "OPEN" : "CLOSED"}
                     </span>
                 </div>
-
                 <button 
                     onClick={toggleReg} 
                     disabled={loading}
@@ -194,7 +202,6 @@ function SystemControls() {
                 </button>
             </div>
 
-            {/* CARD 2: Grade Submission */}
             <div className={`p-6 rounded-lg border shadow-sm transition ${settings.grade_submission ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                 <div className="flex justify-between items-start mb-4">
                     <div>
@@ -206,13 +213,11 @@ function SystemControls() {
                         : <Lock className="text-red-600" size={28}/>
                     }
                 </div>
-                
                 <div className="mb-6">
                     <span className={`px-2 py-1 text-xs font-bold rounded ${settings.grade_submission ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                         STATUS: {settings.grade_submission ? "OPEN" : "CLOSED"}
                     </span>
                 </div>
-
                 <button 
                     onClick={toggleGrade} 
                     disabled={loading}
@@ -227,22 +232,20 @@ function SystemControls() {
 }
 
 /* =========================================================
-   COMPONENT 1: USER LIST (Logic adapted from original AdminDashboard)
+   COMPONENT 1: USER LIST
    ========================================================= */
 function UserList({ status }) {
   const [users, setUsers] = useState([]);
   const [filterRole, setFilterRole] = useState("");   
   const [selectedIds, setSelectedIds] = useState([]);
 
-  // Fetch Users based on prop status and local role filter
   const fetchUsers = useCallback(async () => {
     try {
       const params = { status };
       if (filterRole) params.role = filterRole;
-
       const res = await api.get("/admin/users", { params });
       setUsers(res.data || []);
-      setSelectedIds([]); // Clear selection on tab/filter change
+      setSelectedIds([]); 
     } catch (err) {
       console.error("Failed to fetch users", err);
     }
@@ -251,8 +254,6 @@ function UserList({ status }) {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
-
-  // --- Actions ---
 
   const handleAction = async (userId, action) => {
     if(!window.confirm(`Are you sure you want to ${action} this user?`)) return;
@@ -285,8 +286,6 @@ function UserList({ status }) {
       alert("Reset failed.");
     }
   };
-
-  // --- Bulk Actions ---
 
   const toggleSelect = (id) => {
     if (selectedIds.includes(id)) {
@@ -334,7 +333,6 @@ function UserList({ status }) {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">
           {status.charAt(0) + status.slice(1).toLowerCase()} Users
@@ -348,7 +346,6 @@ function UserList({ status }) {
         </button>
       </div>
 
-      {/* Filter Bar */}
       <div className="bg-white p-4 rounded shadow mb-6 flex flex-wrap gap-4 items-center border border-gray-200">
         <span className="font-bold text-gray-700">Filter Role:</span>
         <select 
@@ -367,7 +364,6 @@ function UserList({ status }) {
         </button>
       </div>
 
-      {/* Bulk Action Bar */}
       {selectedIds.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 p-3 rounded mb-4 flex items-center justify-between animate-fade-in shadow-sm">
           <span className="font-bold text-blue-800">
@@ -414,7 +410,6 @@ function UserList({ status }) {
         </div>
       )}
 
-      {/* Table */}
       <div className="bg-white shadow rounded overflow-hidden border border-gray-200">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-100 border-b border-gray-200">
@@ -458,7 +453,6 @@ function UserList({ status }) {
                     </span>
                   </td>
                   <td className="p-4 flex justify-center gap-2">
-                    {/* ACTION BUTTONS */}
                     {status === 'PENDING' && (
                       <>
                         <button onClick={() => handleAction(u.user_id, 'APPROVE')} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-medium transition">Accept</button>
@@ -489,7 +483,93 @@ function UserList({ status }) {
 }
 
 /* =========================================================
-   COMPONENT 2: ADMIN COURSE LIST (Adapted from AllCourses.jsx)
+   COMPONENT: ADMIN COURSE APPROVALS (NEW)
+   ========================================================= */
+function AdminCourseApprovals() {
+  const [courses, setCourses] = useState([]);
+
+  const fetchPendingCourses = async () => {
+    try {
+      const res = await api.get("/admin/pending-courses");
+      setCourses(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch pending courses", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingCourses();
+  }, []);
+
+  const handleAction = async (courseId, action) => {
+    const text = action === "APPROVE" ? "Accept" : "Reject";
+    if (!window.confirm(`Are you sure you want to ${text} this course?`)) return;
+
+    try {
+      await api.post("/admin/approve-course", { courseId, action });
+      alert(`Course ${action}ED successfully.`);
+      fetchPendingCourses();
+    } catch (err) {
+      alert("Action failed.");
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">Pending Course Approvals</h2>
+      
+      {courses.length === 0 ? (
+        <p className="text-gray-500 italic">No courses pending approval.</p>
+      ) : (
+        <div className="bg-white border rounded shadow overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-gray-100 border-b">
+              <tr>
+                <th className="p-4 font-semibold text-gray-600">Course</th>
+                <th className="p-4 font-semibold text-gray-600">Instructor</th>
+                <th className="p-4 font-semibold text-gray-600">Dept</th>
+                <th className="p-4 font-semibold text-gray-600 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {courses.map(c => (
+                <tr key={c.course_id} className="hover:bg-gray-50">
+                  <td className="p-4">
+                    <div className="font-bold text-gray-800">{c.title}</div>
+                    <div className="text-xs text-gray-500">{c.course_code}</div>
+                  </td>
+                  <td className="p-4">
+                    <div>{c.instructor?.full_name}</div>
+                    <div className="text-xs text-gray-500">{c.instructor?.email}</div>
+                  </td>
+                  <td className="p-4 text-gray-600">{c.department}</td>
+                  <td className="p-4 text-right flex justify-end gap-2">
+                    <button 
+                      onClick={() => handleAction(c.course_id, "APPROVE")}
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-bold transition"
+                    >
+                      Approve
+                    </button>
+                    <button 
+                      onClick={() => handleAction(c.course_id, "REJECT")}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-bold transition"
+                    >
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* =========================================================
+   COMPONENT 2: ADMIN COURSE LIST
    ========================================================= */
 function AdminCourseList() {
   const [courses, setCourses] = useState([]);

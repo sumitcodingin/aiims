@@ -1,5 +1,6 @@
+/* file: backend/controllers/instructorController.js */
 const supabase = require("../supabaseClient");
-const { sendStatusEmail } = require('../utils/mailer'); // CHANGED: Points to centralized mailer
+const { sendStatusEmail } = require('../utils/mailer'); 
 
 /* ===================================================
    Helper: Update Course Enrolled Count
@@ -204,14 +205,16 @@ const awardGrade = async (req, res) => {
 };
 
 // ===================================================
-// 5. Float a Course
+// 5. Float a Course (UPDATED)
 // ===================================================
 const floatCourse = async (req, res) => {
   const { course_code, title, department, acad_session, credits, capacity, slot, instructor_id } = req.body;
 
   try {
+    // Basic validation
     if (!slot) return res.status(400).json({ error: "Course slot is required." });
 
+    // Check for duplicate slot
     const { data: existingSlotCourses, error: slotError } = await supabase
       .from("courses")
       .select("course_id")
@@ -219,9 +222,17 @@ const floatCourse = async (req, res) => {
       .eq("acad_session", acad_session)
       .eq("slot", slot);
 
-    if (slotError) throw slotError;
-    if (existingSlotCourses && existingSlotCourses.length > 0) return res.status(400).json({ error: "You already have a course in this slot" });
+    if (slotError) {
+        // If error is strictly about the column missing, we might want to log it, 
+        // but typically this throws if slot matches. 
+        console.error("Slot check error:", slotError);
+    }
+    
+    if (existingSlotCourses && existingSlotCourses.length > 0) {
+        return res.status(400).json({ error: "You already have a course in this slot" });
+    }
 
+    // Get Advisor (Optional now)
     const { data: instructorUser, error: userError } = await supabase
       .from("users")
       .select("advisor_id")
@@ -229,17 +240,25 @@ const floatCourse = async (req, res) => {
       .single();
 
     if (userError || !instructorUser) return res.status(404).json({ error: "Instructor user not found." });
-    if (!instructorUser.advisor_id) return res.status(400).json({ error: "You do not have an assigned advisor. Please contact Admin." });
+    
+    // REMOVED BLOCKER: If no advisor, we proceed with null.
+    // if (!instructorUser.advisor_id) ...
 
+    const advisorIdToUse = instructorUser.advisor_id || null;
+
+    // CHANGED STATUS TO PENDING_ADMIN_APPROVAL
     const { error } = await supabase.from("courses").insert([
       {
         course_code, title, department, acad_session, credits, capacity, slot,
-        faculty_id: instructor_id, advisor_id: instructorUser.advisor_id, status: "PENDING_ADVISOR_APPROVAL", enrolled_count: 0,
+        faculty_id: instructor_id, 
+        advisor_id: advisorIdToUse, // Can be null now
+        status: "PENDING_ADMIN_APPROVAL", // Goes to Admin
+        enrolled_count: 0,
       },
     ]);
 
     if (error) throw error;
-    res.status(201).json({ message: "Course floated successfully. Sent to your assigned advisor for approval." });
+    res.status(201).json({ message: "Course floated successfully. Sent to Admin for approval." });
   } catch (err) {
     console.error("FLOAT COURSE ERROR:", err);
     res.status(500).json({ error: err.message || "Failed to float course." });

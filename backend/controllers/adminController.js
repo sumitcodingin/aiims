@@ -1,3 +1,4 @@
+/* file: backend/controllers/adminController.js */
 const supabase = require('../supabaseClient');
 const { sendNotificationEmail } = require('../utils/mailer');
 const { sendCustomEmail } = require('../utils/sendCustomEmail');
@@ -232,8 +233,8 @@ exports.toggleCourseRegistration = async (req, res) => {
     // 3. Send Bulk Email
     if (emails.length > 0) {
         const subject = isOpen 
-            ? "📢 Course Registration is NOW OPEN" 
-            : "🚫 Course Registration is CLOSED";
+            ? "📣 Course Registration is NOW OPEN" 
+            : "🔒 Course Registration is CLOSED";
         
         const message = isOpen
             ? "Dear User,\n\nThe course add/drop window is now OPEN. Students may proceed to register for courses.\n\nRegards,\nAcademic Administration"
@@ -279,8 +280,8 @@ exports.toggleGradeSubmission = async (req, res) => {
     // 3. Send Bulk Email
     if (emails.length > 0) {
         const subject = isOpen 
-            ? "🎓 Grade Submission Portal OPEN" 
-            : "⏳ Grade Submission Portal CLOSED";
+            ? "📝 Grade Submission Portal OPEN" 
+            : "🛑 Grade Submission Portal CLOSED";
         
         const message = isOpen
             ? "Dear Instructor,\n\nThe grade submission portal is now OPEN. You may proceed to award grades to your students.\n\nRegards,\nAcademic Administration"
@@ -298,5 +299,53 @@ exports.toggleGradeSubmission = async (req, res) => {
   } catch (err) {
     console.error("TOGGLE GRADING ERROR:", err);
     res.status(500).json({ error: "Failed to update grading status" });
+  }
+};
+
+// ============================
+// 8. NEW: Get Pending Courses for Admin
+// ============================
+exports.getPendingCourses = async (req, res) => {
+  try {
+    // Fetch courses with status PENDING_ADMIN_APPROVAL
+    const { data, error } = await supabase
+      .from('courses')
+      .select(`
+        course_id, course_code, title, department, acad_session, capacity, credits,
+        instructor:users!faculty_id(full_name, email)
+      `)
+      .eq('status', 'PENDING_ADMIN_APPROVAL');
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error("GET PENDING COURSES ERROR:", err);
+    res.status(500).json({ error: "Fetch failed." });
+  }
+};
+
+// ============================
+// 9. NEW: Admin Approve/Reject Course
+// ============================
+exports.approveCourse = async (req, res) => {
+  const { courseId, action } = req.body;
+
+  try {
+    let newStatus = "";
+    if (action === "APPROVE") newStatus = "APPROVED";
+    else if (action === "REJECT") newStatus = "REJECTED";
+    else return res.status(400).json({ error: "Invalid action." });
+
+    const { error } = await supabase
+      .from("courses")
+      .update({ status: newStatus })
+      .eq("course_id", courseId);
+
+    if (error) throw error;
+    
+    res.json({ message: `Course ${action}ED successfully.` });
+  } catch (err) {
+    console.error("ADMIN APPROVE COURSE ERROR:", err);
+    res.status(500).json({ error: "Failed to update course status." });
   }
 };

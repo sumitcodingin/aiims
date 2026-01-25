@@ -1,3 +1,4 @@
+/* file: backend/routes/adminRoutes.js */
 const router = require('express').Router();
 const { 
   resetEnrollments, 
@@ -6,7 +7,9 @@ const {
   deleteUser,
   getSystemSettings,
   toggleCourseRegistration,
-  toggleGradeSubmission
+  toggleGradeSubmission,
+  getPendingCourses, // NEW
+  approveCourse      // NEW
 } = require('../controllers/adminController');
 
 router.delete('/reset-enrollments', resetEnrollments);
@@ -18,5 +21,9 @@ router.post('/delete-user', deleteUser);
 router.get('/system-settings', getSystemSettings);
 router.post('/toggle-registration', toggleCourseRegistration);
 router.post('/toggle-grading', toggleGradeSubmission);
+
+// NEW: Course Approval Routes
+router.get('/pending-courses', getPendingCourses);
+router.post('/approve-course', approveCourse);
 
 module.exports = router;

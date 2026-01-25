@@ -1,10 +1,12 @@
+/* file: frontend/src/pages/AdvisorDashboard.jsx */
 import { useState } from "react";
-import AdvisorApprovals from "./advisor/AdvisorApprovals";
-import CourseApprovals from "./advisor/CourseApprovals";
 import AllCourses from "./advisor/AllCourses";
 import AdvisorProfile from "./advisor/AdvisorProfile";
 import AcademicEvents from "./advisor/AcademicEvents";
-import MyStudents from "./advisor/MyStudents"; // ✅ NEW IMPORT
+import MyStudents from "./advisor/MyStudents"; 
+import AdvisorApprovals from "./advisor/AdvisorApprovals"; 
+// NEW IMPORT
+import MyInstructorCourses from "./advisor/MyInstructorCourses";
 
 export default function AdvisorDashboard() {
   const [activeTab, setActiveTab] = useState("students");
@@ -28,16 +30,16 @@ export default function AdvisorDashboard() {
             <NavBtn active={activeTab === "students"} onClick={() => setActiveTab("students")}>
               Student Approvals
             </NavBtn>
-
-            <NavBtn active={activeTab === "courses"} onClick={() => setActiveTab("courses")}>
-              Course Approvals
+            
+            {/* NEW BUTTON */}
+            <NavBtn active={activeTab === "instructor-courses"} onClick={() => setActiveTab("instructor-courses")}>
+              Instructor Courses
             </NavBtn>
 
             <NavBtn active={activeTab === "all-courses"} onClick={() => setActiveTab("all-courses")}>
               All Offerings
             </NavBtn>
 
-            {/* ✅ NEW TAB */}
             <NavBtn active={activeTab === "my-students"} onClick={() => setActiveTab("my-students")}>
               My Students
             </NavBtn>
@@ -68,9 +70,10 @@ export default function AdvisorDashboard() {
       {/* ================= MAIN ================= */}
       <main className="ml-64 p-6 min-h-screen overflow-y-auto">
         {activeTab === "students" && <AdvisorApprovals />}
-        {activeTab === "courses" && <CourseApprovals />}
+        {/* NEW COMPONENT RENDER */}
+        {activeTab === "instructor-courses" && <MyInstructorCourses />}
         {activeTab === "all-courses" && <AllCourses />}
-        {activeTab === "my-students" && <MyStudents />} {/* ✅ */}
+        {activeTab === "my-students" && <MyStudents />} 
         {activeTab === "events" && <AcademicEvents />}
         {activeTab === "profile" && <AdvisorProfile />}
       </main>

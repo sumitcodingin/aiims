@@ -1,4 +1,5 @@
-import { useState } from "react";
+/* file: frontend/src/pages/instructor/FloatCourse.jsx */
+import { useState, useEffect } from "react";
 import api from "../../services/api";
 
 const DEPARTMENTS = [
@@ -16,7 +17,15 @@ const SLOTS = [
 ];
 
 export default function FloatCourse({ onSuccess }) {
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  // 1. FIX: Use localStorage to match api.js
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+  }, []);
 
   const [form, setForm] = useState({
     course_code: "",
@@ -25,7 +34,7 @@ export default function FloatCourse({ onSuccess }) {
     acad_session: "2025-II",
     credits: "",
     capacity: "",
-    slot: "", // Added slot to state
+    slot: "", 
   });
 
   const [showConfirm, setShowConfirm] = useState(false);
@@ -33,13 +42,18 @@ export default function FloatCourse({ onSuccess }) {
 
   /* ================= SUBMIT HANDLER ================= */
   const submit = () => {
+    if (!user) {
+      alert("You must be logged in to float a course.");
+      return;
+    }
+
     if (
       !form.course_code ||
       !form.title ||
       !form.department ||
       !form.credits ||
       !form.capacity ||
-      !form.slot // Validate slot
+      !form.slot 
     ) {
       alert("Please fill all required fields.");
       return;
@@ -52,15 +66,18 @@ export default function FloatCourse({ onSuccess }) {
     try {
       setLoading(true);
 
+      // 2. FIX: Robust ID check (user_id vs id)
+      const instructorId = user.user_id || user.id;
+
       await api.post("/instructor/float-course", {
         ...form,
-        instructor_id: user.id,
+        instructor_id: instructorId,
         credits: Number(form.credits),
         capacity: Number(form.capacity),
       });
 
       setShowConfirm(false);
-      alert("Course floated successfully. Awaiting advisor approval.");
+      alert("Course floated successfully. Awaiting Admin approval.");
 
       setForm({
         course_code: "",
@@ -74,6 +91,7 @@ export default function FloatCourse({ onSuccess }) {
 
       if (onSuccess) onSuccess();
     } catch (err) {
+      console.error("Float Course Error:", err);
       alert(err.response?.data?.error || "Failed to float course");
     } finally {
       setLoading(false);
@@ -117,7 +135,6 @@ export default function FloatCourse({ onSuccess }) {
             disabled
           />
 
-          {/* New Slot Dropdown */}
           <Select
             label="Course Slot"
             value={form.slot}

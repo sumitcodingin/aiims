@@ -1,3 +1,4 @@
+/* file: frontend/src/services/api.js */
 import axios from "axios";
 
 const api = axios.create({
@@ -14,7 +15,7 @@ api.interceptors.request.use(
   (config) => {
     /**
      * Retrieve User Data
-     * Changed to localStorage for persistent sessions (retains login across tabs/windows).
+     * Using localStorage for persistent sessions.
      */
     let user = null;
     try {
@@ -59,11 +60,8 @@ api.interceptors.response.use(
       if (window.location.pathname !== "/" && window.location.pathname !== "/login") {
         console.warn("Session expired. Logging out...");
         
-        // Clear local session data (Changed to localStorage)
+        // Clear local session data
         localStorage.removeItem("user");
-        
-        // Optional: Alert the user
-        // alert("Your session has expired. Please login again.");
         
         // Redirect to login
         window.location.href = "/";

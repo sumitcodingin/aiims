@@ -1,35 +1,34 @@
-const router = require("express").Router();
-const authSession = require("../middleware/authSession");
-
-const {
-  getInstructorCourses,
-  getCourseApplications,
-  approveByInstructor,
-  awardGrade,
-  floatCourse,
+/* file: backend/routes/instructorRoutes.js */
+const router = require('express').Router();
+const { 
+  getInstructorCourses, 
+  getCourseApplications, 
+  approveByInstructor, 
+  awardGrade, 
+  floatCourse, // ✅ IMPORTED
   getInstructorFeedback,
   getEnrolledStudentsForCourse,
   validateGradesCSV,
-  submitMassGrades,
-} = require("../controllers/instructorController");
+  submitMassGrades
+} = require('../controllers/instructorController');
 
-/* ==================================
-   🔐 PROTECT ALL INSTRUCTOR ROUTES
-================================== */
-router.use(authSession);
+// 1. Get Courses & Applications
+router.get('/courses', getInstructorCourses);
+router.get('/applications', getCourseApplications);
 
-/* ==================================
-   INSTRUCTOR ROUTES
-================================== */
+// 2. Manage Students (Approve/Reject)
+router.post('/approve-student', approveByInstructor);
 
-router.get("/courses", getInstructorCourses);
-router.get("/applications", getCourseApplications);
-router.get("/feedback", getInstructorFeedback);
-router.get("/enrolled-students/:course_id", getEnrolledStudentsForCourse);
-router.post("/approve-request", approveByInstructor);
-router.post("/award-grade", awardGrade);
-router.post("/float-course", floatCourse);
-router.post("/validate-grades-csv", validateGradesCSV);
-router.post("/submit-mass-grades", submitMassGrades);
+// 3. Float New Course
+router.post('/float-course', floatCourse); 
+
+// 4. Grading
+router.post('/award-grade', awardGrade);
+router.post('/validate-grades', validateGradesCSV);
+router.post('/submit-mass-grades', submitMassGrades);
+
+// 5. Feedback & Utils
+router.get('/feedback', getInstructorFeedback);
+router.get('/course-students/:course_id', getEnrolledStudentsForCourse);
 
 module.exports = router;
