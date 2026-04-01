@@ -1,6 +1,6 @@
 # 🎓 IIT Ropar Academic Portal (AIMS-micro)
 
-An institutional-grade platform designed to digitize and automate complex academic workflows—from OTP-based secure onboarding and multi-tier course registration to research collaboration and automated grade analytics.
+An institutional-grade platform designed to digitalize and automate complex academic workflows—from OTP-based secure onboarding and multi-tier course registration to research collaboration and automated grade analytics.
 
 
 
